@@ -1,0 +1,21 @@
+# bacon test/FOCUS
+require 'hipe-core/asciitypesetting'
+require 'bacon'
+require 'ruby-debug'
+
+include Hipe::AsciiTypesetting
+
+describe FormattableString do
+  before do
+    # @string = FormattableString.new("One two three.  Four five six.")
+  end
+  
+  
+  it "should work (4)" do
+    debugger
+    s = FormattableString.new "012 456 89" 
+    s.sentence_wrap_once!(6).should == '012...'
+    s.should == '456 89'
+  end
+  
+end
