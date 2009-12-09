@@ -97,35 +97,39 @@ module Hipe
         attr_reader :plurality, :article
         attr_accessor :say_count, :list
         def say_count
-          @say_count or @list.size <= 1          
+          @say_count or size <= 1
+        end
+        def size
+          @size or @list.size
         end
         def flatten_into(arr)
-          arr << article if(@say_count || @list.size < 2)
+          arr << article if(@say_count || size < 2)
           @adjp.flatten_into(arr) if @adjp
           arr << @root + (plurality == :singular ? '' : 's')
           @pp.flatten_into(arr) if @pp
-          flatten_list_into(arr) if say_count and @list.size>0
+          flatten_list_into(arr) if say_count and size>0 and @list
         end
         def flatten_list_into(arr)
-          if (@list.size>0) 
+          if (size>0 and @list) 
             arr.last << ':' unless arr.last =~ /:$/  # hack
-            arr << @list.and{|x|%{"#{x}"}}
+            arr << @list.and()  # {|x|%{"#{x}"}}
           end
         end
         def article
-          case list.size
+          case size
           when 0 then 'no'
-          when 1 then 'only one'
+          when 1 then 'one'
           when 2 then 'two'
           else list.size.to_s
           end          
         end
         def list=(arr)
           @list = arr
+          @size = nil
           @list.extend List unless @list.kind_of? List
         end
         def plurality
-          @list.size == 1 ? :singular : :plural          
+          size == 1 ? :singular : :plural          
         end
         def self.[](*args)
           self.new(args)
@@ -134,12 +138,16 @@ module Hipe
           @say_count = true          
           args.each do |arg|
             case arg
+            when Fixnum
+              @size = arg
             when String
               @root = arg
             when Adjp
               @adjp = arg
             when Pp
               @pp = arg
+            when Array
+              self.list = arg
             else
               raise %{no: "#{arg.class}" -- "#{arg}"}
             end

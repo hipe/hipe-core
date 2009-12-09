@@ -14,8 +14,9 @@ module Hipe
     
     module FormattableString
       def self.new(s)
-        s.extend self
-        s
+        other = s.dup       # this caused some bugs when we didn't dup it, when running the same code twice
+        other.extend self
+        other
       end
       def word_wrap_once!(length)
         re = /^(.{0,#{length}})(?:\s+|$)(.*)/

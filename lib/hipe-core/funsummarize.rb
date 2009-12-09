@@ -1,3 +1,4 @@
+require 'hipe-core/structdiff'
 module Hipe
   module FunSummarize
     # expects an arbirarily deep nested hash with symbol names and values that are either
@@ -27,7 +28,7 @@ module Hipe
     
     
     # say as little of a sentence as you need to.
-    def minimize template, values
+    def self.minimize template, values
       @last_template ||= nil
       @last_values ||= nil
       if (template == @last_template)
@@ -46,7 +47,7 @@ module Hipe
       ret
     end
     
-    def template_render template, values
+    def self.template_render template, values
       ret = template.clone #* ''TODO'' test if this is necessary
       values.each{|k,v| ret.gsub! %{%%#{k}%%}, v}
       ret
