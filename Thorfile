@@ -3,23 +3,22 @@ module GemHelpers
 
   def generate_gemspec
     $LOAD_PATH.unshift(File.expand_path(File.join(File.dirname(__FILE__), "lib")))
-    require "cli"
+    require 'hipe-core'
     
     Gem::Specification.new do |s|    
       s.name      = 'hipe-core'
-      s.version   = Hipe::Cli::VERSION
+      s.version   = Hipe::Core::VERSION
       s.required_rubygems_version = Gem::Requirement.new("> 1.3.1") if s.respond_to? :required_rubygems_version=
       s.author    = "Mark Meves"
       s.email     = "mark.meves@gmail.com"
       s.homepage  = "http://github.com/hipe/hipe-core"
       s.date      = %q{2009-11-19}  
-      s.summary   = %q{Getopt plus validations and help screen generation}  
+      s.summary   = %q{core library for the hipe family of products}  
       s.description  = <<-EOS.strip
-      hipe-core is an experimental command-line "framework" that aides
-      in parsing commands and options and displaying and formatting
-      help screens, etc.
+      core library for the hipe family of products.  data-structure related utilities.
+      rudimentary natural language production.  exception factories.  struct diff.
+      fun for the whole family.
       EOS
-      # s.rubyforge_project = "webrat"
 
       require "git"
       repo = Git.open(".")
@@ -31,8 +30,7 @@ module GemHelpers
       #s.extra_rdoc_files = %w[README.rdoc MIT-LICENSE.txt History.txt]
       s.extra_rdoc_files = %w[MIT-LICENSE.txt History.txt]
 
-      #s.add_dependency "nokogiri", ">= 1.2.0"
-      #s.add_dependency "rack", ">= 1.0"
+      s.add_dependency "rools", ">= 0.4" # just if you want well formed articles for hipe-core/lingual
     end
   end
 
