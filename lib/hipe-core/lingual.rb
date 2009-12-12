@@ -1,4 +1,5 @@
 # this was started before i discovered http://www.deveiate.org/projects/Linguistics/
+# indeed i continued to work on it after i discoverd the above link, which i haven't looked at yet.
 module Hipe
   module Lingual 
     
@@ -12,6 +13,7 @@ module Hipe
       def self.np   *args; Np[*args] end
       def self.pp   *args; Pp[*args] end
       def self.adjp *args; Adjp[*args] end
+      def self.artp *args; Artp[*args] end      
       def self.construct &block
         self.instance_eval(&block)
       end
@@ -37,6 +39,11 @@ module Hipe
         def flatten
           self.flatten_into(arr=[])
           arr
+        end
+
+        # originally this was the domain of sentences only
+        def say
+          flatten.join(' ')
         end
         
         def flatten_into(arr)
@@ -90,12 +97,11 @@ module Hipe
           flatten.join(' ')+'.'
         end
       end
-    
 
       class Np
         include Phrase
-        attr_reader :plurality, :article
-        attr_accessor :say_count, :list
+        attr_reader :plurality, :article, :tokens
+        attr_accessor :say_count, :list, :artp
         def say_count
           @say_count or size <= 1
         end
@@ -103,15 +109,28 @@ module Hipe
           @size or @list.size
         end
         def flatten_into(arr)
-          arr << article if(@say_count || size < 2)
-          @adjp.flatten_into(arr) if @adjp
-          arr << @root + (plurality == :singular ? '' : 's')
-          @pp.flatten_into(arr) if @pp
-          flatten_list_into(arr) if say_count and size>0 and @list
+          local_arr = []   # we do everything but article first to allow agreement!
+          @adjp.flatten_into(local_arr) if @adjp
+          local_arr << @root + (plurality == :singular ? '' : 's')
+          @pp.flatten_into(local_arr) if @pp
+          flatten_list_into(local_arr) if say_count and size>0 and @list
+          @tokens = local_arr  #here is the thing -- this is just a hack to pass it to artp below
+          if (@artp)
+            @artp.flatten_into(arr)
+          elsif(@say_count || size < 2)
+            arr << article
+          end
+          local_arr.each do |x|
+            arr << x # += won't work 
+          end
         end
         def flatten_list_into(arr)
           if (size>0 and @list) 
-            arr.last << ':' unless arr.last =~ /:$/  # hack
+            unless arr.last =~ /:$/ # colon hack
+              if (@artp.nil? || @artp.is_a?(DefiniteArticle))
+                arr.last << ':' 
+              end
+            end
             arr << @list.and()  # {|x|%{"#{x}"}}
           end
         end
@@ -135,19 +154,25 @@ module Hipe
           self.new(args)
         end
         def initialize(args)
+          if (Hash === args.last)
+            opts = args.pop
+            say_count = opts[:say_count]
+          end
           @say_count = true          
           args.each do |arg|
             case arg
-            when Fixnum
-              @size = arg
-            when String
-              @root = arg
-            when Adjp
-              @adjp = arg
-            when Pp
-              @pp = arg
-            when Array
-              self.list = arg
+            when Fixnum   then @size = arg
+            when String   then @root = arg
+            when Adjp     then @adjp = arg
+            when Pp       then @pp = arg
+            when Array    then self.list = arg
+            when Artp
+              @artp = arg
+              @artp.np = self
+            when Symbol 
+              if (:the==arg) then @artp = En.adjp(:def)
+              elsif (:an ==arg) then @artp = En.adjp(:indef)
+              else; raise %{"no"} end
             else
               raise %{no: "#{arg.class}" -- "#{arg}"}
             end
@@ -173,6 +198,76 @@ module Hipe
     
       class Adjp
         include Phrase
+      end
+      
+      module IndefiniteArticle; end
+      module DefiniteArticle; end
+      
+      # manage agreement with noun phraes (a/an) and agreement with count (this/these)
+      class Artp
+        attr_accessor :surface
+        include Phrase
+        def initialize(args)
+          type = args[0]
+          @type = case type
+          when :def 
+            self.extend DefiniteArticle
+            :def
+          when :indef
+            self.extend IndefiniteArticle
+            :indef
+          else 
+            raise Exception.new(%{sorry, bad article type: "#{type.inspect}"})
+          end
+          if (@has_rools.nil?)
+            rs = Gem.source_index.search(Gem::Dependency.new('rools', Gem::Version.new('0.4')))
+            @has_rools = (rs.count > 0)
+            init_rules if @has_rools
+          end
+        end
+        def init_rules
+          @has_rools = true
+          require 'rools'
+          #require 'logger'; # Rools::Base.logger = Logger.new(STDOUT)
+          @rules = Rools::RuleSet.new do
+            rule 'the' do
+              parameter DefiniteArticle
+              consequence{
+                hipe__lingual__en__artp.surface = (hipe__lingual__en__artp.np.size == 0) ? nil : 'the' 
+              }
+            end
+            rule 'no' do
+              parameter Np
+              condition{ article.np.count == 0 }; 
+              consequence { hipe__lingual__en__artp.surface = 'no' }
+            end
+            rule 'a/an' do
+              parameter IndefiniteArticle
+              condition{ article.np.count == 1 }
+              consequence{ hipe__lingual__en__artp.surface = (/^[aeiou]/ =~  np.tokens.first )? 'an' : 'a' }
+            end
+            rule 'a couple' do
+              parameter IndefiniteArticle
+              condition{ article.np.count == 2 }
+              consequence { hipe__lingual__en__artp.surface = 'a couple' }
+            end
+            rule 'some' do
+              parameter IndefiniteArticle
+              condition{ article.np.count > 2 }
+              consequence { hipe__lingual__en__artp.surface = 'some' }
+            end
+          end
+        end
+        attr_accessor :np
+        def flatten_into(arr)
+          return unless @rules
+          pass_fail = @rules.assert(self)
+          if(:pass == pass_fail)
+            arr << self.surface
+          else
+            # debug this!
+          end
+        end
       end
 
       module List
@@ -204,8 +299,10 @@ module Hipe
           Hipe::Lingual::List.join self, ', ', ' and ', &block        
         end
       end
-    
     end # En
     List = En::List
+    def self.list(array)
+      return List[array]
+    end
   end # Lingual
 end

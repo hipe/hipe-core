@@ -1,2 +1,9 @@
+* StructDiff - added :sort option to allow consistent comparison of diffs for testing.
+* Lingual - indefinite and definite articles with rule tables
+* StructDiff - tests are now with the output of summarize() instead of structures
+* StructDiff - tried and failed to make tests for struct diff -- ironic feedback loop here
+* StructDiff - a rudimentary comparison of Arrays
+* Rakefile tasks for bringing back in spec
+* base exception class is now almost empty, and a factory pattern mixin introduced
 == 0.0.0 / 2009-11-19
 * broken off from "blog migrator" cli 

@@ -1,4 +1,14 @@
+# require 'spec'
+require 'spec/rake/spectask'
+require 'spec/rake/verify_rcov'
+
+
+
+
+
+
 # thanks manveru
+
 desc 'Run all bacon specs with pretty output'
 task :bacon do
   require 'open3'
@@ -6,7 +16,7 @@ task :bacon do
   require 'matrix'
 
   PROJECT_SPECS = FileList[
-    'test/*_test.rb'
+    'spec/spec_*.rb'
   ]
 
   specs = PROJECT_SPECS
@@ -26,7 +36,7 @@ task :bacon do
   specs.each_with_index do |spec, idx|
     print(left_format % [idx + 1, specs_size, spec])
 
-    Open3.popen3(RUBY, '-I', load_path, spec) do |sin, sout, serr|
+    Open3.popen3('bacon', '-I', load_path, spec) do |sin, sout, serr|
       out = sout.read.strip
       err = serr.read.strip
 
@@ -74,4 +84,33 @@ task :bacon do
   total_color = some_failed ? red : green
   puts(total_color % (spec_format % totals.to_a))
   exit 1 if some_failed
+end
+
+
+SPECOPTS  = ['--options', "\"#{File.dirname(__FILE__)}/test/spec.opts\""]
+SPECFILES = FileList['test/**/*_spec.rb']
+
+desc "run all specs"
+Spec::Rake::SpecTask.new do |t|
+  t.spec_opts = SPECOPTS
+  t.spec_files = SPECFILES
+end
+
+desc "Run all specs with rcov"
+Spec::Rake::SpecTask.new(:rcov) do |t|
+  t.spec_opts = SPECOPTS
+  t.spec_files = SPECFILES
+  t.rcov = true
+  t.rcov_opts = lambda do
+    IO.readlines(File.dirname(__FILE__) + "/test/rcov.opts").map {|l| l.chomp.split " "}.flatten
+  end
+end
+
+RCov::VerifyTask.new(:verify_rcov => :rcov) do |t|
+  t.threshold = 80 # Make sure you have rcov 0.7 or higher!
+end
+
+desc 'Removes trailing whitespace'
+task :whitespace do
+  sh %{find . -name '*.rb' -exec sed -i '' 's/ *$//g' {} \\;}
 end

@@ -1,4 +1,4 @@
-require 'hipe-core/structdiff'
+require 'hipe-core/struct-diff'
 module Hipe
   module FunSummarize
     # expects an arbirarily deep nested hash with symbol names and values that are either

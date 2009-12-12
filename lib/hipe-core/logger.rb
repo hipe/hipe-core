@@ -1,3 +1,4 @@
+# @deprecated just use logger.rb (see rools gem for an example)
 module Hipe
   module Cli
     module Loggable

@@ -1,16 +1,36 @@
 module Hipe
   module AsciiTypesetting
-    def self.wordwrap text, line_width  # thanks rails
-      text.split("\n").collect do |line|
-        line.length > line_width ? line.gsub(/(.{1,#{line_width}})(\s+|$)/, "\\1\n").strip : line
-      end * "\n"
+    
+    # it would be nice if
+    # these methods could be 1) extended by a module that wants them as module methods,
+    # 2) they can be extended by a class that wants them as class methods, 
+    # 3) they can be included by a class that wants them as instance methods, or 4) they can be called
+    # as module methods of the module containing this comment.
+    #
+    module Methods
+      def wordwrap text, line_width  # thanks rails
+        text.split("\n").collect do |line|
+          line.length > line_width ? line.gsub(/(.{1,#{line_width}})(\s+|$)/, "\\1\n").strip : line
+        end * "\n"
+      end
+      def truncate(str,max_len,ellipses='...')
+        if (str.nil?) then ''
+        elsif (str.length <= max_len) then str
+        elsif (max_len <= ellipses.length) then str[0,max_len]
+        else; str[0,max_len-ellipses.length]+ellipses end
+      end
+      
+      def recursive_brackets list, left, right
+        return '' if list.size == 0  # not the official base case.  just being cautius
+        ret = list[0]
+        if list.size > 1
+          ret += left + recursive_brackets(list.slice(1,list.size-1), left, right) + right
+        end
+        ret
+      end
     end
-    def self.truncate(str,max_len,ellipses='...')
-      if (str.nil?) then ''
-      elsif (str.length <= max_len) then str
-      elsif (max_len <= ellipses.length) then str[0,max_len]
-      else; str[0,max_len-ellipses.length]+ellipses end
-    end
+
+    extend Methods 
     
     module FormattableString
       def self.new(s)

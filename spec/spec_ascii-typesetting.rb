@@ -1,9 +1,9 @@
 # bacon test/asciitypesetting_test.rb
-require 'hipe-core/asciitypesetting'
+require 'hipe-core/ascii-typesetting'
 require 'bacon'
 require 'ruby-debug'
 
-include Hipe::AsciiTypesetting
+include Hipe::AsciiTypesetting::Methods
 describe Hipe::AsciiTypesetting do 
   
   it "truncate should work" do
@@ -16,6 +16,7 @@ describe Hipe::AsciiTypesetting do
 end
 
 
+include Hipe::AsciiTypesetting
 describe FormattableString do
   before do
     @string = FormattableString.new("One two three.  Four five six.")

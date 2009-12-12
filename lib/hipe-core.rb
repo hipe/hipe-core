@@ -1,8 +1,10 @@
 module Hipe
-  class Exception < ::Exception
-    def self.factory(string,details={})
-      extra = (details.size > 0) ? %{ #{details.inspect}} : ''
-      return self.new(%{#{string}#{extra}})
+  class Exception < ::Exception; 
+    attr_accessor :details
+    def initialize(string,details=nil)
+      @details = details || {}
+      super(string)
     end
   end
 end
+# keep it light and simple in here!  weird stuff can go in its own file.
