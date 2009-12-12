@@ -16,7 +16,7 @@ module Hipe
           string << mixed
           string << "\n" if (mixed.kind_of? String and mixed.length > 0 and mixed[mixed.size-1] != "\n"[0])
         end
-      end      
+      end
     end
     class BufferString < String # there was StringIO but i couldn't figure out how to use it
       include BufferStringLike

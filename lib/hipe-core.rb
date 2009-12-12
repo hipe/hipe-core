@@ -1,5 +1,5 @@
 module Hipe
-  class Exception < ::Exception; 
+  class Exception < ::Exception;
     attr_accessor :details
     def initialize(string,details=nil)
       @details = details || {}

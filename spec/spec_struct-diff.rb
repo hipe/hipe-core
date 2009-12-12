@@ -12,7 +12,7 @@ def get_fixture(name)
 end
 
 describe Hipe::StructDiff do
-  before do 
+  before do
     @left = {
       :alpha  => 1,
       'delta' => 3,
@@ -23,29 +23,29 @@ describe Hipe::StructDiff do
       :beta   => 2,
       'delta' => 3,
       'gamma' => 4,
-      :alpha  => 1,      
-    }        
+      :alpha  => 1,
+    }
   end
-  
+
   it "simple sorting of uninvolved nodes (s0)" do
     left = {}
-    left['i disappear'] = { 'a'=>'','z'=>'','m'=>'','q'=>'',:b=>''}        
+    left['i disappear'] = { 'a'=>'','z'=>'','m'=>'','q'=>'',:b=>''}
     right = {}
     d = Hipe::StructDiff.diff(left,right,:sort=>1)
     d.summarize.include?(%[removed: {"i disappear"=>{"a"=>"", :b=>"", "m"=>"", "q"=>"", "z"=>""}}]).should == true
   end
-  
-  it "should work with ordered hashing (s1)" do 
+
+  it "should work with ordered hashing (s1)" do
     d = Hipe::StructDiff.diff(@left,@right,:sort=>1)
     d.summarize.should.match(/none/)
   end
-  
+
   it "should provide a somewhat complex sorted diff (s2)" do
     @left['epsilon']  = 5
     @left[:zeta]      = 6
     @left['eta']      = 7
     @left['i change'] = { :orange=>'citrus', :apple=>'ungulate', }
-    @left['i disappear'] = { 'a'=>'','z'=>'','m'=>'','q'=>'',:b=>''}    
+    @left['i disappear'] = { 'a'=>'','z'=>'','m'=>'','q'=>'',:b=>''}
     @right[:theta]    = 5
     @right['iota']    = 6
     @right[:kappa]    = 7
@@ -54,7 +54,7 @@ describe Hipe::StructDiff do
     d = Hipe::StructDiff.diff(@left,@right,:sort=>1)
     have = d.summarize
     target = <<-BLAH.gsub(/^    /,'')
-    
+
     removed: {"epsilon"=>5, "eta"=>7, "i disappear"=>{"a"=>"", :b=>"", "m"=>"", "q"=>"", "z"=>""}, :zeta=>6}
     added:    {"i am added"=>{:w=>"", :x=>"", "y"=>"", "z"=>""}, "iota"=>6, :kappa=>7, :theta=>5}
       - i change:
@@ -67,7 +67,7 @@ describe Hipe::StructDiff do
   end
 
   it "should work (s3)" do
-    
+
     left = {
       :fruit=>'apple',
       :lunch=>'beavis',
@@ -88,7 +88,7 @@ describe Hipe::StructDiff do
     # target = get_fixture('diff1')
     have = diff.summarize
     want = <<-TARGET.gsub(/^    /,'')
-    
+
     removed: {:lunch=>"beavis"}
     added:    {:blah=>{:blah=>"1", :blahh=>"2"}, :breakfast=>"pear", :brunch=>"tofu"}
       - difftypes:
@@ -99,14 +99,14 @@ describe Hipe::StructDiff do
             removed: "scrambled"
             added:    "on toast"
     TARGET
-            
+
     have.should == want
   end
-  
-  it "should summarize" do 
+
+  it "should summarize" do
     left = {
       :firstname=>'jake'
-    }  
+    }
     right = {
       :firstname=>'sara'
     }

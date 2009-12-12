@@ -5,7 +5,7 @@ module Hipe
     # (leave node) an integer or (tree node) another such hash.  returns an array of lines indented appropiratel
     def self._fun_summarize(hash, indent_amt='  ', current_indent='', parent_key = nil)
       my_total = 0;
-      my_lines = []      
+      my_lines = []
       hash.each do |key,value|
         left_side = ([parent_key.to_s,key.to_s].compact * '_').gsub!(/_/, ' ')
         if (value.instance_of? Fixnum)
@@ -14,30 +14,30 @@ module Hipe
         else
           child_lines,child_total = _fun_summarize(value, indent_amt, current_indent+indent_amt, key)
           my_lines << %{#{current_indent}#{left_side} (#{child_total} total):}
-          my_total += child_total          
+          my_total += child_total
           my_lines += child_lines
         end
       end
       [my_lines, my_total]
     end
-    
+
     def self.summarize_totals(hash, indent_amt='  ')
       lines, total = _fun_summarize(hash, indent_amt, current_indent='  ')
       %{(#{total} total):\n}+(lines * "\n")
     end
-    
-    
+
+
     # say as little of a sentence as you need to.
     def self.minimize template, values
       @last_template ||= nil
       @last_values ||= nil
       if (template == @last_template)
-        # they will alwyas have the same keys, so we look at middle        
-        diff = StructDiff::diff(@last_values, values) 
+        # they will alwyas have the same keys, so we look at middle
+        diff = StructDiff::diff(@last_values, values)
         @last_values = values
         ret = " and "+(diff.middle_diff.map do |key,value|
-          value_string = value.right.to_s.match(/^[0-9]+$/) ? value.right.to_s : %{"#{value.right}"}          
-          %{#{key}#{value_string}} 
+          value_string = value.right.to_s.match(/^[0-9]+$/) ? value.right.to_s : %{"#{value.right}"}
+          %{#{key}#{value_string}}
         end * " with ")
       else
         @last_template = template
@@ -46,11 +46,11 @@ module Hipe
       end
       ret
     end
-    
+
     def self.template_render template, values
       ret = template.clone #* ''TODO'' test if this is necessary
       values.each{|k,v| ret.gsub! %{%%#{k}%%}, v}
       ret
-    end    
+    end
   end
 end

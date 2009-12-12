@@ -1,19 +1,19 @@
 # this was started before i discovered http://www.deveiate.org/projects/Linguistics/
 # indeed i continued to work on it after i discoverd the above link, which i haven't looked at yet.
 module Hipe
-  module Lingual 
-    
+  module Lingual
+
     def self.en(&block)
       En.construct(&block)
     end
-    
+
     module En
 
       def self.sp   *args; Sp[*args] end
       def self.np   *args; Np[*args] end
       def self.pp   *args; Pp[*args] end
       def self.adjp *args; Adjp[*args] end
-      def self.artp *args; Artp[*args] end      
+      def self.artp *args; Artp[*args] end
       def self.construct &block
         self.instance_eval(&block)
       end
@@ -23,19 +23,19 @@ module Hipe
         module ClassMethods
           def [](*parts)
             return self.new(parts)
-          end          
+          end
         end
-        
+
         def self.included(obj)
           obj.extend ClassMethods
           super(obj)
         end
-        
+
         def initialize(parts)
           @parts = parts
           @parts.each{|x| if x.kind_of?(String) then x.extend(Token) end }
         end
-        
+
         def flatten
           self.flatten_into(arr=[])
           arr
@@ -45,28 +45,28 @@ module Hipe
         def say
           flatten.join(' ')
         end
-        
+
         def flatten_into(arr)
           all_my_children{|child| child.flatten_into(arr)}
         end
-        
+
         def token_count
           sum = 0
           all_my_children{sum += x.token_count}
           sum
         end
-        
+
         def all_my_children &block
           @parts.each(&block)
         end
       end
-      
+
       module Token
         include Phrase
         def token_count; 1 end
         def flatten_into(arr); arr << self end
       end
-    
+
       class Sp
         include Phrase
         attr_accessor :np, :vp
@@ -88,7 +88,7 @@ module Hipe
             @vp.flatten_into(arr)
             @np.flatten_into(arr)
           else
-            @np.flatten_into(arr)            
+            @np.flatten_into(arr)
             @vp.flatten_into(arr)
             @np.flatten_list_into(arr)
           end
@@ -121,14 +121,14 @@ module Hipe
             arr << article
           end
           local_arr.each do |x|
-            arr << x # += won't work 
+            arr << x # += won't work
           end
         end
         def flatten_list_into(arr)
-          if (size>0 and @list) 
+          if (size>0 and @list)
             unless arr.last =~ /:$/ # colon hack
               if (@artp.nil? || @artp.is_a?(DefiniteArticle))
-                arr.last << ':' 
+                arr.last << ':'
               end
             end
             arr << @list.and()  # {|x|%{"#{x}"}}
@@ -140,7 +140,7 @@ module Hipe
           when 1 then 'one'
           when 2 then 'two'
           else list.size.to_s
-          end          
+          end
         end
         def list=(arr)
           @list = arr
@@ -148,7 +148,7 @@ module Hipe
           @list.extend List unless @list.kind_of? List
         end
         def plurality
-          size == 1 ? :singular : :plural          
+          size == 1 ? :singular : :plural
         end
         def self.[](*args)
           self.new(args)
@@ -158,7 +158,7 @@ module Hipe
             opts = args.pop
             say_count = opts[:say_count]
           end
-          @say_count = true          
+          @say_count = true
           args.each do |arg|
             case arg
             when Fixnum   then @size = arg
@@ -169,7 +169,7 @@ module Hipe
             when Artp
               @artp = arg
               @artp.np = self
-            when Symbol 
+            when Symbol
               if (:the==arg) then @artp = En.adjp(:def)
               elsif (:an ==arg) then @artp = En.adjp(:indef)
               else; raise %{"no"} end
@@ -179,11 +179,11 @@ module Hipe
           end
         end
       end
-    
+
       class Vp
         include Phrase
       end
-    
+
       class ToBe < Vp
         attr_accessor :agent
         def initialize(); end
@@ -191,18 +191,18 @@ module Hipe
           arr << ( @agent.plurality == :singular ? 'is' : 'are' )
         end
       end
-    
+
       class Pp
-        include Phrase        
+        include Phrase
       end
-    
+
       class Adjp
         include Phrase
       end
-      
+
       module IndefiniteArticle; end
       module DefiniteArticle; end
-      
+
       # manage agreement with noun phraes (a/an) and agreement with count (this/these)
       class Artp
         attr_accessor :surface
@@ -210,13 +210,13 @@ module Hipe
         def initialize(args)
           type = args[0]
           @type = case type
-          when :def 
+          when :def
             self.extend DefiniteArticle
             :def
           when :indef
             self.extend IndefiniteArticle
             :indef
-          else 
+          else
             raise Exception.new(%{sorry, bad article type: "#{type.inspect}"})
           end
           if (@has_rools.nil?)
@@ -233,12 +233,12 @@ module Hipe
             rule 'the' do
               parameter DefiniteArticle
               consequence{
-                hipe__lingual__en__artp.surface = (hipe__lingual__en__artp.np.size == 0) ? nil : 'the' 
+                hipe__lingual__en__artp.surface = (hipe__lingual__en__artp.np.size == 0) ? nil : 'the'
               }
             end
             rule 'no' do
               parameter Np
-              condition{ article.np.count == 0 }; 
+              condition{ article.np.count == 0 };
               consequence { hipe__lingual__en__artp.surface = 'no' }
             end
             rule 'a/an' do
@@ -283,20 +283,20 @@ module Hipe
           else
             joiners = ['',conj2]
             joiners += ::Array.new(list.size-2,conj1) if list.size >= 3
-            list.zip(joiners.reverse).flatten.join 
+            list.zip(joiners.reverse).flatten.join
           end
         end
-      
+
         def either &block
-          (self.size > 1 ? "either " : '')+ self.or(&block)        
+          (self.size > 1 ? "either " : '')+ self.or(&block)
         end
-      
+
         def or &block
           Hipe::Lingual::List.join self, ', ', ' or ', &block
         end
-      
+
         def and &block
-          Hipe::Lingual::List.join self, ', ', ' and ', &block        
+          Hipe::Lingual::List.join self, ', ', ' and ', &block
         end
       end
     end # En

@@ -1,9 +1,9 @@
 module Hipe
   module AsciiTypesetting
-    
+
     # it would be nice if
     # these methods could be 1) extended by a module that wants them as module methods,
-    # 2) they can be extended by a class that wants them as class methods, 
+    # 2) they can be extended by a class that wants them as class methods,
     # 3) they can be included by a class that wants them as instance methods, or 4) they can be called
     # as module methods of the module containing this comment.
     #
@@ -19,7 +19,7 @@ module Hipe
         elsif (max_len <= ellipses.length) then str[0,max_len]
         else; str[0,max_len-ellipses.length]+ellipses end
       end
-      
+
       def recursive_brackets list, left, right
         return '' if list.size == 0  # not the official base case.  just being cautius
         ret = list[0]
@@ -30,8 +30,8 @@ module Hipe
       end
     end
 
-    extend Methods 
-    
+    extend Methods
+
     module FormattableString
       def self.new(s)
         other = s.dup       # this caused some bugs when we didn't dup it, when running the same code twice
@@ -49,23 +49,23 @@ module Hipe
           ''
         end
       end
-      
+
       def word_wrap!(length)
         self.replace(Hipe::AsciiTypesetting::wordwrap(self,length))
         self
       end
-      
+
       # num will be mixed string or Fixnum one day
       def indent!(num)
         replace( ' ' * num + self.gsub("\n", "\n"+' '*num))
         self
       end
-      
-      # try to truncate without breaking any sentences.  I.e, return 
+
+      # try to truncate without breaking any sentences.  I.e, return
       # as many contiguous sentences as you can that start from the beginning
       # and have a total length less than or equal to length.
       # If the first sentence is longer than length, then truncate with '...' ellipses
-      # A sentence is defined as a string ending in '?','.', or '!' followed 
+      # A sentence is defined as a string ending in '?','.', or '!' followed
       # by ' ' or end of string
       def sentence_wrap_once!(length)
         md = /^(.{0,#{length-1}}[^\?\.!])(?:([\?\.!]+) +|$)(.*)$/.match(self)
@@ -78,6 +78,6 @@ module Hipe
         end
         first
       end
-    end         
+    end
   end
 end

@@ -1,5 +1,5 @@
 module Hipe
-  module CommonExceptionClassMethods 
+  module CommonExceptionClassMethods
     attr_accessor :exception_modules
     attr_accessor :default_exception_class
     def factory (string,details={})
@@ -8,7 +8,7 @@ module Hipe
         if @exception_modules.size == 0
           string << %{(no exception_modules registered.)}
         else
-          class_name = details[:type].to_s.gsub(/(?:^|_)([a-z])/){$1.upcase}          
+          class_name = details[:type].to_s.gsub(/(?:^|_)([a-z])/){$1.upcase}
           @exception_modules.each do |mod|
             if mod.constants.include? class_name
               use_this_class = mod.const_get class_name
@@ -34,7 +34,7 @@ module Hipe
       return use_this_class.new(*args)
     end
   end
-  
+
   module ExceptionLike
     def self.included klass
       klass.extend CommonExceptionClassMethods
