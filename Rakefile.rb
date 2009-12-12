@@ -1,10 +1,23 @@
 # require 'spec'
 require 'spec/rake/spectask'
 require 'spec/rake/verify_rcov'
+require 'rcov/rcovtask'
 
 
+desc 'Removes trailing whitespace'
+task :whitespace do
+  sh %{find . -name '*.rb' -exec sed -i '' 's/ *$//g' {} \\;}
+end
 
+Rcov::RcovTask.new do |t|
+  t.test_files = FileList['spec/spec_*.rb']
+  t.verbose = true     # uncomment to see the executed command
+  t.rcov_opts = ['--exclude', 'spec,/Library/Ruby/Gems/1.8/gems']
+end
 
+RCov::VerifyTask.new(:verify_rcov => :rcov) do |t|
+  t.threshold = 80 # Make sure you have rcov 0.7 or higher!
+end
 
 
 # thanks manveru
@@ -86,31 +99,23 @@ task :bacon do
   exit 1 if some_failed
 end
 
-
-SPECOPTS  = ['--options', "\"#{File.dirname(__FILE__)}/test/spec.opts\""]
-SPECFILES = FileList['test/**/*_spec.rb']
-
-desc "run all specs"
-Spec::Rake::SpecTask.new do |t|
-  t.spec_opts = SPECOPTS
-  t.spec_files = SPECFILES
-end
-
-desc "Run all specs with rcov"
-Spec::Rake::SpecTask.new(:rcov) do |t|
-  t.spec_opts = SPECOPTS
-  t.spec_files = SPECFILES
-  t.rcov = true
-  t.rcov_opts = lambda do
-    IO.readlines(File.dirname(__FILE__) + "/test/rcov.opts").map {|l| l.chomp.split " "}.flatten
-  end
-end
-
-RCov::VerifyTask.new(:verify_rcov => :rcov) do |t|
-  t.threshold = 80 # Make sure you have rcov 0.7 or higher!
-end
-
-desc 'Removes trailing whitespace'
-task :whitespace do
-  sh %{find . -name '*.rb' -exec sed -i '' 's/ *$//g' {} \\;}
-end
+#
+#SPECOPTS  = ['--options', "\"#{File.dirname(__FILE__)}/test/spec.opts\""]
+#SPECFILES = FileList['test/**/spec_*.rb']
+#
+#desc "run all specs"
+#Spec::Rake::SpecTask.new do |t|
+#  t.spec_opts = SPECOPTS
+#  t.spec_files = SPECFILES
+#end
+#
+#desc "Run all specs with rcov"
+#Spec::Rake::SpecTask.new(:rcov) do |t|
+#  t.spec_opts = SPECOPTS
+#  t.spec_files = SPECFILES
+#  t.rcov = true
+#  t.rcov_opts = lambda do
+#    IO.readlines(File.dirname(__FILE__) + "/test/rcov.opts").map {|l| l.chomp.split " "}.flatten
+#  end
+#end
+#
