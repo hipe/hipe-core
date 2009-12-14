@@ -6,7 +6,7 @@ module Hipe
     def self.en(&block)
       En.construct(&block)
     end
-
+        
     module En
 
       def self.sp   *args; Sp[*args] end
@@ -94,7 +94,7 @@ module Hipe
           end
         end
         def say
-          flatten.join(' ')+'.'
+          flatten.join(' ') # Periods! punctuation! @todo  ("available subcommands are.")
         end
       end
 
@@ -102,6 +102,31 @@ module Hipe
         include Phrase
         attr_reader :plurality, :article, :tokens
         attr_accessor :say_count, :list, :artp
+        def initialize(args)
+          @say_count = true
+          if (Hash === args.last)
+            opts = args.pop
+            @say_count = opts[:say_count]
+          end
+          args.each do |arg|
+            case arg
+            when Fixnum   then @size = arg
+            when String   then @root = arg
+            when Adjp     then @adjp = arg
+            when Pp       then @pp = arg
+            when Array    then self.list = arg
+            when Artp
+              @artp = arg
+              @artp.np = self
+            when Symbol
+              if (:the==arg) then @artp = En.adjp(:def)
+              elsif (:an ==arg) then @artp = En.adjp(:indef)
+              else; raise %{"no"} end
+            else
+              raise %{no: "#{arg.class}" -- "#{arg}"}
+            end
+          end
+        end        
         def say_count
           @say_count or size <= 1
         end
@@ -139,7 +164,7 @@ module Hipe
           when 0 then 'no'
           when 1 then 'one'
           when 2 then 'two'
-          else list.size.to_s
+          else size.to_s
           end
         end
         def list=(arr)
@@ -152,31 +177,6 @@ module Hipe
         end
         def self.[](*args)
           self.new(args)
-        end
-        def initialize(args)
-          if (Hash === args.last)
-            opts = args.pop
-            say_count = opts[:say_count]
-          end
-          @say_count = true
-          args.each do |arg|
-            case arg
-            when Fixnum   then @size = arg
-            when String   then @root = arg
-            when Adjp     then @adjp = arg
-            when Pp       then @pp = arg
-            when Array    then self.list = arg
-            when Artp
-              @artp = arg
-              @artp.np = self
-            when Symbol
-              if (:the==arg) then @artp = En.adjp(:def)
-              elsif (:an ==arg) then @artp = En.adjp(:indef)
-              else; raise %{"no"} end
-            else
-              raise %{no: "#{arg.class}" -- "#{arg}"}
-            end
-          end
         end
       end
 

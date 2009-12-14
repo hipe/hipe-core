@@ -40,7 +40,7 @@ describe Hipe::Lingual::List do
     sp = Hipe::Lingual.en{ sp(np('user',pp('currently','online'))) }
 
     sp.np.list = []
-    sp.say.should == "there are no users currently online."
+    sp.say.should == "there are no users currently online"
 
     sp.np.list = ['joe']
     sp.say.should.match( /there is(?: only)? one user currently online:? "?joe"?/ )

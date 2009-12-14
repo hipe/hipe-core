@@ -1,6 +1,6 @@
 module Hipe
   module Core
-    VERSION = '0.0.1'
+    VERSION = '0.0.2'
   end
   class Exception < ::Exception;
     attr_accessor :details

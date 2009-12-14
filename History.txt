@@ -1,3 +1,6 @@
+== FOR 0.0.2 or later
+  * 95% coverage
+  * bugfix in lingual
 == 0.0.1 / 2009-12-12
 * StructDiff - added :sort option to allow consistent comparison of diffs for testing.
 * Lingual - indefinite and definite articles with rule tables
