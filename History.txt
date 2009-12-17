@@ -1,14 +1,16 @@
-== for later
+== future
   * 95% coverage
+== 0.0.3 / 2009-12-15 == NOT TAGGED AS RELEASE YET!
+  * Added Erroneous, GoldenHammer
 == 0.0.2 / 2009-12-14
   * bugfix in lingual
 == 0.0.1 / 2009-12-12
-* StructDiff - added :sort option to allow consistent comparison of diffs for testing.
-* Lingual - indefinite and definite articles with rule tables
-* StructDiff - tests are now with the output of summarize() instead of structures
-* StructDiff - tried and failed to make tests for struct diff -- ironic feedback loop here
-* StructDiff - a rudimentary comparison of Arrays
-* Rakefile tasks for bringing back in spec
-* ExceptionLike mixin for factory pattern exceptions.
+  * StructDiff - added :sort option to allow consistent comparison of diffs for testing.
+  * Lingual - indefinite and definite articles with rule tables
+  * StructDiff - tests are now with the output of summarize() instead of structures
+  * StructDiff - tried and failed to make tests for struct diff -- ironic feedback loop here
+  * StructDiff - a rudimentary comparison of Arrays
+  * Rakefile tasks for bringing back in spec
+  * ExceptionLike mixin for factory pattern exceptions.
 == 0.0.0 / 2009-11-19
-* broken off from "blog migrator" cli 
+  * broken off from "blog migrator" cli 

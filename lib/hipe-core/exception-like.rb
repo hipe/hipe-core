@@ -2,7 +2,11 @@ module Hipe
   module CommonExceptionClassMethods
     attr_accessor :exception_modules
     attr_accessor :default_exception_class
+    def modules=(mods)
+      @exception_modules = mods
+    end
     def factory (string,details={})
+      @exception_modules ||= []
       use_this_class = nil
       if (details[:type])
         if @exception_modules.size == 0
