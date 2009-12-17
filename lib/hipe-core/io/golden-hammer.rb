@@ -10,6 +10,7 @@ module Hipe
       attr_reader :data, :string
       def initialize
         @data = {}
+        OpenStructLike.enhance(@data)
         @data.extend OpenStructLike
         @string = BufferString.new('')
       end
