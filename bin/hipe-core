@@ -1,0 +1,22 @@
+#!/usr/bin/env ruby
+# -*- mode: ruby -*-
+
+require 'hipe-core/lingual/ascii-typesetting'
+require 'hipe-cli'
+
+class HipeCore
+  include Hipe::Cli
+  include Hipe::AsciiTypesetting::Methods
+  cli.does('ww',"test worwrap") do
+    option('-h','--help',help)
+    option('-c','color')
+    required('cols', Integer, 'the number of columns')
+    required('line', 'the line you want to wrap')
+  end
+  cli.does('-h','--help',"you're looking at.")
+  def ww(cols, line, opts={})
+    wordwrap(line,cols)
+  end
+end
+
+puts HipeCore.new.cli.run(ARGV) if $PROGRAM_NAME == __FILE__

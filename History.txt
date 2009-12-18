@@ -1,6 +1,9 @@
 == future
   * 95% coverage
 == 0.0.3 / 2009-12-15 == NOT TAGGED AS RELEASE YET!
+  * tiny hipe-core command line app to test wordwrap!
+  * Lots of little utilities and extension modules, some fully tested, some half-baked
+  * Yet another restructuring of where we keep files
   * Added Erroneous, GoldenHammer
 == 0.0.2 / 2009-12-14
   * bugfix in lingual
