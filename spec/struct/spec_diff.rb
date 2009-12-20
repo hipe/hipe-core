@@ -1,7 +1,7 @@
 # bacon spec/struct/spec_diff.rb
 require 'bacon'
 require 'hipe-core/struct/diff'
-require File.expand_path(File.dirname(__FILE__)+'/../bacon-test-strap')
+require 'hipe-core/test/bacon-extensions'
 require 'ruby-debug'
 
 out = $stdout

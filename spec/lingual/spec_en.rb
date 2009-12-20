@@ -58,7 +58,7 @@ describe Hipe::Lingual::En do
       )
     }
     sp.outs << notice_stream
-    
+
     sp.np.list = []
     sp.say.should.equal "there are no users currently online"
 
@@ -72,7 +72,7 @@ describe Hipe::Lingual::En do
 
   it "should work with different count setting (en4)" do
     sp = Hipe::Lingual.en{ sp(np(adjp('valid'),'option')) }
-    sp.outs << notice_stream    
+    sp.outs << notice_stream
     sp.np.say_count = false
     sp.np.list = []
     sp.say.should.match %r{there are no valid options}
@@ -91,7 +91,7 @@ describe Hipe::Lingual::En do
     np.size = 3
     "the three amigos".should.equal np.say
     np.size = 2
-    "the two amigos".should.equal np.say  
+    "the two amigos".should.equal np.say
     np.size = 1
     "the one amigo".should.equal np.say
     np.size = 0
@@ -99,13 +99,13 @@ describe Hipe::Lingual::En do
   end
 
   it "should use some kind of defaults when there is no article and no count (en6)" do
-    sp = Hipe::Lingual.en{ np('amigo') }    
-    sp.outs << notice_stream    
+    sp = Hipe::Lingual.en{ np('amigo') }
+    sp.outs << notice_stream
     "amigo".should.equal sp.say
   end
 
   it "should express quantity in a casual way when it is known and the article is indefinite (en7)" do
-    Hipe::Lingual::En.outs << notice_stream    
+    Hipe::Lingual::En.outs << notice_stream
     "a lot of amigos"    .should.equal     Hipe::Lingual.en{ np(:an,'amigo',6) }.say
     "several amigos"     .should.equal     Hipe::Lingual.en{ np(:an,'amigo',5) }.say
     "some amigos"        .should.equal     Hipe::Lingual.en{ np(:an,'amigo',4) }.say

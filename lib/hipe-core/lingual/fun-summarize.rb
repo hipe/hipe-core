@@ -2,7 +2,7 @@ require 'hipe-core/struct-diff'
 module Hipe
   module FunSummarize
     # expects an arbirarily deep nested hash with symbol names and values that are either
-    # (leave node) an integer or (tree node) another such hash.  returns an array of lines indented appropiratel
+    # (leave node) an integer or (tree node) another such hash.  returns an array of lines indented appropirately
     def self._fun_summarize(hash, indent_amt='  ', current_indent='', parent_key = nil)
       my_total = 0;
       my_lines = []

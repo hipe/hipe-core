@@ -4,6 +4,7 @@ require 'hipe-core/struct/hash-like-write-once-extension'
 
 module Hipe
   class RulesLite
+    attr_reader :rules
     module Common
       def e(*args); Hipe::Exception[*args] end
     end
@@ -82,8 +83,8 @@ module Hipe
       end
       # Apply the consequence of the rule w/o evaluating the conditions!
       #
-      def apply(rule_name)
-        run @rules[rule_name].consequence
+      def apply(rule)
+        run((String===rule) ? @rules[rule].consequence : rule.consequence)
       end
       def reevaluate()
         throw(:stop_loop, :because=>:avoid_infinite_loop) if @reevaluated_from[rule.name]

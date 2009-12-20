@@ -40,12 +40,12 @@ module Hipe
 
     def hash_like_write_once_extension_init
       @hlwoe_orig_store = method(:store)
-      @on_clobber_any = nil      
-      @on_clobber = {}  
+      @on_clobber_any = nil
+      @on_clobber = {}
       @frozen = {}
       @write_once = {}
       meta = class << self; self end
-      meta.send(:define_method,:store) do |key,value|        
+      meta.send(:define_method,:store) do |key,value|
         hlwoe_store(key,value)
       end
       meta.send(:alias_method, :[]=, :store)
@@ -62,7 +62,7 @@ module Hipe
         @hlwoe_orig_store.call(key,value)
       end
     end
-    
+
     def write_once! *list, &block
       if (list.size == 0)
         @write_once = true
@@ -76,17 +76,17 @@ module Hipe
           else
             @write_once[key] = true
           end
-          @on_clobber[key] = block || on_clobber_default_default          
+          @on_clobber[key] = block || on_clobber_default_default
         end
       end
     end
-    
+
     def on_clobber_default_default
       @on_clobber_default_default ||= lambda{|key,value|
         raise TypeError.new(%{can't overwrite frozen position #{key.inspect} of #{self.class}})
       }
     end
-    
+
     def freeze_index!(key)
       @frozen[key] = true
     end

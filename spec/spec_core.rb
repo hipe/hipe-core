@@ -1,5 +1,4 @@
 # bacon spec/spec_core.rb
-
 require 'hipe-core'
 require 'ruby-debug'
 

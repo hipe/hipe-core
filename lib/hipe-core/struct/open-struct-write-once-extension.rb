@@ -5,7 +5,7 @@ module Hipe
     #
     # Warning - we are considering making this an extension for a plain old hash instead,
     # and then using it internally in an OrderedHash and/or OpenStruct
-    #    
+    #
     # With some data structures it is useful to assert that certain elements only
     # get written zero or one time -- that is that that element is never clobbered.
     # This mixin gives that ability to an OpenStruct.

@@ -29,7 +29,7 @@ module Hipe
         rule 'if article is not definite and count is known and sayable (or zero or one), say "there is/are..."' do
           condition{
             zero_or_one = (np.size==0 or np.size==1)
-            
+
             (!(DefiniteArticle===np.artp) or zero_or_one) and  np.size and
             ((np.say_count or np.say_count.nil?) or (zero_or_one) )
           }
@@ -166,7 +166,7 @@ module Hipe
         def outs
           @outs ||= []
         end
-        
+
         def say
           flatten(arr=[])
           arr.compact!
