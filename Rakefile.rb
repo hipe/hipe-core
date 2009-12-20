@@ -1,7 +1,26 @@
-# require 'spec'
-require 'spec/rake/spectask'
-require 'spec/rake/verify_rcov'
+# This file is copy-pasted into other gems (and versioned there) but this here is the official version
+# which officially lives in github.com/hipe/hipe-core..etc.  This is a list of the other projects
+# that use this file, when you change it here make sure it doesn't break there
+#  - hipe-cli
+
+# require 'spec/rake/spectask'
 require 'rcov/rcovtask'
+require 'ruby-debug'
+
+RakefileConfig = {
+  :spec => {
+    :bacon => {
+      :patterns => ['spec/**/spec_*.rb'] # this is a subset of the pattern supported by the "bacon -a" command
+    }
+  }
+}
+
+# desc "Run API and Core specs -- lose this. we are using bacon now"
+# Spec::Rake::SpecTask.new do |t|
+#   t.spec_opts = ['--options', "\"#{File.dirname(__FILE__)}/spec/spec.opts\""]
+#   t.spec_files = FileList['spec/public/*_spec.rb'] + FileList['spec/private/**/*_spec.rb']
+# end
+#
 
 
 desc 'Removes trailing whitespace'
@@ -10,29 +29,20 @@ task :whitespace do
 end
 
 Rcov::RcovTask.new do |t|
-  t.test_files = FileList['spec/spec_*.rb']
+  t.test_files = FileList[RakefileConfig[:spec][:bacon][:patterns][0]]
   t.verbose = true     # uncomment to see the executed command
   t.rcov_opts = ['--exclude', 'spec,/Library/Ruby/Gems/1.8/gems']
 end
 
-RCov::VerifyTask.new(:verify_rcov => :rcov) do |t|
-  t.threshold = 80 # Make sure you have rcov 0.7 or higher!
-end
-
 
 # thanks manveru
-
 desc 'Run all bacon specs with pretty output'
 task :bacon do
   require 'open3'
   require 'scanf'
   require 'matrix'
-
-  PROJECT_SPECS = FileList[
-    'spec/spec_*.rb'
-  ]
-
-  specs = PROJECT_SPECS
+  
+  specs = FileList[RakefileConfig[:spec][:bacon][:pattern]]
 
   some_failed = false
   specs_size = specs.size
@@ -49,7 +59,8 @@ task :bacon do
   specs.each_with_index do |spec, idx|
     print(left_format % [idx + 1, specs_size, spec])
 
-    Open3.popen3('bacon', '-I', load_path, spec) do |sin, sout, serr|
+    # Open3.popen3(RUBY, '-I', load_path, spec) do |sin, sout, serr|
+    Open3.popen3('bacon','-I', load_path, spec) do |sin, sout, serr|
       out = sout.read.strip
       err = serr.read.strip
 
@@ -62,16 +73,13 @@ task :bacon do
         puts(yellow % ("%6s %s" % ['', $1]))
       else
         total = nil
-
         out.each_line do |line|
           scanned = line.scanf(spec_format)
-
+          #puts line
           next unless scanned.size == 4
-
           total = Vector[*scanned]
           break
         end
-
         if total
           totals += total
           tests, assertions, failures, errors = total_array = total.to_a
@@ -98,24 +106,3 @@ task :bacon do
   puts(total_color % (spec_format % totals.to_a))
   exit 1 if some_failed
 end
-
-#
-#SPECOPTS  = ['--options', "\"#{File.dirname(__FILE__)}/test/spec.opts\""]
-#SPECFILES = FileList['test/**/spec_*.rb']
-#
-#desc "run all specs"
-#Spec::Rake::SpecTask.new do |t|
-#  t.spec_opts = SPECOPTS
-#  t.spec_files = SPECFILES
-#end
-#
-#desc "Run all specs with rcov"
-#Spec::Rake::SpecTask.new(:rcov) do |t|
-#  t.spec_opts = SPECOPTS
-#  t.spec_files = SPECFILES
-#  t.rcov = true
-#  t.rcov_opts = lambda do
-#    IO.readlines(File.dirname(__FILE__) + "/test/rcov.opts").map {|l| l.chomp.split " "}.flatten
-#  end
-#end
-#
