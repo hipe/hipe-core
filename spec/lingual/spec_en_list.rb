@@ -1,5 +1,5 @@
-# bacon test/lingual_test.rb
-require 'hipe-core/lingual'
+# bacon spec/spec_en_list.rb
+require 'hipe-core/lingual/en'
 require 'bacon'
 require 'ruby-debug'
 
@@ -31,35 +31,5 @@ describe Hipe::Lingual::List do
   it "quote land (l5)" do
     Hipe::Lingual::List[%w(beavis butthead DARIA toucan-sam)].either{|x|%{"#{x}"}}.should  ==
       'either "beavis", "butthead", "DARIA" or "toucan-sam"'
-  end
-end
-
-
-describe Hipe::Lingual::List do
-  it "should work (l6)" do
-    sp = Hipe::Lingual.en{ sp(np('user',pp('currently','online'))) }
-
-    sp.np.list = []
-    sp.say.should == "there are no users currently online"
-
-    sp.np.list = ['joe']
-    sp.say.should.match( /there is(?: only)? one user currently online:? "?joe"?/ )
-
-    sp.np.say_count = true
-    sp.np.list = ['jim','sara']
-    sp.say.should.match( /there are two users currently online:? jim and sara/ )
-  end
-
-  it "should work with different count setting (l7)" do
-    sp = Hipe::Lingual.en{ sp(np(adjp('valid'),'option')) }
-    sp.np.say_count = false
-    sp.np.list = []
-    sp.say.should.match /there are no valid options/
-
-    sp.np.list = ['joe']
-    sp.say.should.match /there is(?: only)? one valid option:? joe/
-
-    sp.np.list = ['jim','sara']
-    sp.say.should.match /valid options are:? jim and sara/
   end
 end
