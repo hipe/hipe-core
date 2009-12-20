@@ -2,6 +2,7 @@
 # indeed i continued to work on it after i discoverd the above link, which i haven't looked at yet.
 require 'hipe-core' # for exceptions
 require 'hipe-core/struct/open-struct-write-once-extension'
+require 'hipe-core/logic/rules-lite'
 
 module Hipe
   module Lingual
@@ -9,7 +10,7 @@ module Hipe
     def self.en(&block)
       En.construct(&block)
     end
-        
+
     module En
 
       def self.sp   *args; Sp[*args] end
@@ -17,57 +18,125 @@ module Hipe
       def self.pp   *args; Pp[*args] end
       def self.adjp *args; Adjp[*args] end
       def self.artp *args; Artp[*args] end
+      def self.outs; @outs ||= [] end
       def self.construct &block
-        self.instance_eval(&block)
+        phrase = self.instance_eval(&block)
+        phrase.outs.concat(@outs) if (@outs)
+        phrase
       end
-      
-      class Rules
-        @loaded = nil
-        def self.exist!
-          return @loaded unless @loaded.nil?
-          rs = Gem.source_index.search(Gem::Dependency.new('rools', Gem::Version.new('0.4')))
-          return @loaded unless @loaded = rs.count > 0
-          require 'rools'; require 'logger'          
-          ::Rools::Facts.send(:define_method,:value){
-            if @fact_value.respond_to?(:size) && @fact_value.respond_to?(:[]) && @fact_value.size == 1
-              @fact_value[0]
-            else
-              @fact_value
-            end
+
+      SentenceRules = Hipe::RulesLite.new do
+        rule 'if article is not definite and count is known and sayable (or zero or one), say "there is/are..."' do
+          condition{
+            zero_or_one = (np.size==0 or np.size==1)
+            
+            (!(DefiniteArticle===np.artp) or zero_or_one) and  np.size and
+            ((np.say_count or np.say_count.nil?) or (zero_or_one) )
+          }
+          consequence {
+            tokens << 'there'
+            vp.flatten(tokens)
+            np.flatten(tokens)
           }
         end
-        def self.log=(b)
-          return unless exist!
-          ::Rools::Base.logger = b ? ::Logger.new($stdout) : nil
-        end
-        def self.quantity_rules
-          return unless exist!
-          self.log=true
-          @quantity ||= ::Rools::RuleSet.new do
-             rule '"a/an"' do
-               #parameter IndefiniteArticle
-               condition{ np.size == 1 }
-               consequence{ result.article = /^[aeiou]/ =~ np.first_token ? 'an' : 'a' }
-             end
-            
-            
-            #rule '"no"' do
-            #  parameter Np
-            #  condition{ artp.np.size == 0 };
-            #  consequence { artp.surface = 'no' }
-            #end
-            #rule '"a couple of"' do
-            #  parameter IndefiniteArticle
-            #  condition{ artp.np.size == 2 }
-            #  consequence { artp.surface = 'a couple of' }
-            #end
-            #rule '"some"' do
-            #  parameter IndefiniteArticle
-            #  condition{ artp.np.size > 2 }
-            #  consequence { artp.surface = 'some' }
-            #end
+
+        rule 'else do  ...' do
+          condition{ true }
+          consequence do
+            np.flatten(tokens)
+            vp.flatten(tokens)
+            apply AricleAndCountRules.rules['# list'] if np.list
           end
-        end        
+        end
+      end
+
+      AricleAndCountRules = Hipe::RulesLite.new do
+        rule "if count is known and sayable (or zero), say..." do
+          condition{ size and ((say_count.nil? or say_count) or (size==0 or size==1))}
+          consequence{
+            if (IndefiniteArticle===artp)
+              apply '# indef article casual count'
+            else
+              apply '# count'
+            end
+            tokens.unshift('the') if ( DefiniteArticle===artp and size != 0)
+            apply '# list' if list
+          }
+        end
+
+        rule "if count is not sayable..." do
+          condition{ say_count==false }
+          consequence{
+            tokens.unshift('the') if DefiniteArticle === artp
+          }
+        end
+
+
+
+        #rule 'article is definite and count is available and say_count is true' do
+        #  condition   { DefiniteArticle === np.artp && np.size && np.say_count}
+        #  consequence do
+        #    apply '# apply the count'
+        #    tokens.unshift('the');
+        #  end
+        #end
+
+        #rule 'no article is available and count is zero' do
+        #  condition { np.artp.nil? && np.size == 0}
+        #  consequence {
+        #    apply
+        #  }
+        #end
+        #
+        #rule 'article is indef and count is available' do
+        #  condition { IndefiniteArticle===np.artp && np.size }
+        #  consequence do
+        #    apply '# apply indef article'
+        #  end
+        #end
+        #
+        #rule 'article is indef and no count is available' do
+        #  condition {  IndefiniteArticle===np.artp && !np.size }
+        #  consequence {
+        #    np.size = 1
+        #    apply 'article is indef and count is available'
+        #  }
+        #end
+        #
+        #rule 'no article is available and no count is available' do
+        #  condition {  !np.artp && !np.size }
+        #  consequence {
+        #    np.artp = En.artp(:indef)
+        #    apply 'article is indef and no count is available'
+        #  }
+        #end
+
+        rule '# count' do
+          consequence do
+            tokens.unshift(['no','one','two','three'][np.size] || np.size.to_s)
+          end
+        end
+
+        rule '# list' do
+          consequence do
+            if (np.list.size > 0)
+              if (np.list.size > 0)
+                tokens << Punct[':']        # colon
+              end
+              tokens << np.list.and()
+            end
+          end
+        end
+
+        rule '# indef article casual count' do
+          consequence do
+            if (np.size==1)
+              tokens.unshift((tokens[0] =~ /^[aeiou]/i) ? 'an' : 'a')
+            else
+              tokens.unshift ['no',nil,'a couple of','a few','some','several'][np.size] || 'a lot of'
+            end
+          end
+        end
       end
 
       module Phrase
@@ -84,24 +153,38 @@ module Hipe
         end
 
         def initialize(parts)
+          @outs = nil
           @parts = parts
           @parts.each{|x| if x.kind_of?(String) then x.extend(Token) end }
         end
 
+        # multiplex the output stream. (if you want to see what these guys are saying during testing.)
+        #
+        #     sp.out << $stdout   # during tests to hear what they are saying
+        #
+        # @return an array of output streams
+        def outs
+          @outs ||= []
+        end
+        
         def say
           flatten(arr=[])
           arr.compact!
-          case arr.size
-          when 0 then ''
-          when 1 then arr[0]
-          else # join was so much prettier but we needed punct hack (for colons)
-            str = arr[0]
-            (1..arr.size-1).each do |idx|   # (this won't iterate for (1..0)
-              str << ' ' unless arr[idx].kind_of? Punct
-              str << arr[idx].to_s
+          ret = case arr.size
+            when 0 then ''
+            when 1 then arr[0]
+            else # join was so much prettier but we needed punct hack2 (for colons)
+              str = arr[0]
+              (1..arr.size-1).each do |idx|   # (this won't iterate for (1..0)
+                str << ' ' unless arr[idx].kind_of? Punct
+                str << arr[idx].to_s
+              end
+              str
             end
-            str
+          if (@outs)
+            @outs.each{|out| out.write ret }
           end
+          ret
         end
 
         def flatten(arr)
@@ -118,7 +201,7 @@ module Hipe
         def all_my_children &block
           @parts.each(&block)
         end
-        
+
         def e(*args)
           Hipe::Exception[*args]
         end
@@ -139,22 +222,14 @@ module Hipe
             when Np
               @np = arg
             else
-              raise %{Invalid element to build a sentence phrase #{arg.inspect}}
+              raise e(%{Invalid element to build a sentence phrase #{arg.inspect}})
             end
           end
         end
         def flatten(arr)
-          @vp = ToBe.new()
+          @vp = ToBe.new()  # hack4 - no verbs yet
           @vp.agent = @np
-          if (@np.say_count || @np.say_count.nil?)
-            arr << 'there'
-            @vp.flatten(arr)
-            @np.flatten(arr)
-          else
-            @np.flatten(arr)
-            @vp.flatten(arr)
-            @np.flatten_list_into(arr)
-          end
+          SentenceRules.apply({:tokens => arr, :vp => @vp, :np => @np, :list=>@np.list})
           arr
         end
       end
@@ -176,7 +251,7 @@ module Hipe
             opts = args.pop
             @say_count = opts[:say_count]
           end
-          o = OpenStructWriteOnceExtension.new()          
+          o = OpenStructWriteOnceExtension.new()
           o.write_once!(*(them=[:adjp, :artp, :list, :pp, :root, :size]))
           args.each do |arg|
             case arg
@@ -184,10 +259,10 @@ module Hipe
             when String   then o.root = arg
             when Adjp     then o.adjp = arg
             when Pp       then o.pp   = arg
-            when Array    then o.list = arg
+            when Array    then o.list = List[arg]
             when Artp     then o.artp = arg
-            when Symbol  
-              rs = 
+            when Symbol
+              rs =
               o.artp = En.artp(case arg
                 when :the   then :def
                 when :an,:a then :indef
@@ -198,30 +273,26 @@ module Hipe
           end
           raise e(%{can't have both size and list}) if o.size and o.list
           them.each{|it| instance_variable_set %{@#{it}}, o.send(it)}
-        end        
+        end
+        def say_list
+          true
+        end
         def size
           @size or ( @list && @list.size ) or nil
-        end 
+        end
+        def size=(size)
+          raise TypeError(%{must be Fixnum not #{size.inspect}}) unless Fixnum === size
+          raise TypeError(%{can't set size when list exists}) if @list
+          @size = size
+        end
         def flatten(array)
           arr = []   #indef article must agree w/ whatever comes first in this array
           @adjp.flatten(arr) if @adjp
-          arr << @root + (plurality == :singular ? '' : 's')
+          arr << @root + (plurality == :plural ? 's' : '')
           @pp.flatten(arr) if @pp
-          if r = Rules.quantity_rules
-            o = OpenStruct.new(
-              :list        => @list,         
-              :artp        => @artp || En.artp(:indef),
-              :say_count   => @say_count || true,
-              :size        => size || 1,
-              :first_token => arr[0],
-              :result      => OpenStruct.new
-            )
-            while (:again == catch(:try) do  
-              raise e("failure is not an option") if :fail == r.assert(o.artp)
-            end ) do; end # loop it when necessary            
-            debugger
-            'x'
-          end
+          AricleAndCountRules.apply(  :tokens    => arr,       :artp => artp,   :np    => self,
+            :say_list => say_list,    :say_count => say_count, :list => list,   :size  => size
+          )
           array.concat arr
           array
         end
@@ -231,7 +302,7 @@ module Hipe
           @list.extend List unless List === @list
         end
         def plurality
-          size == 1 ? :singular : :plural
+          size.nil? ? nil : ( size == 1 ? :singular : :plural )
         end
       end
 
@@ -267,10 +338,10 @@ module Hipe
           raise ArgumentError.new("wrong number of arguments (#{args.size} for 1)") unless args.size == 1
           type = args[0]
           @type = case type
-          when :def then self.extend DefiniteArticle; :def 
+          when :def then self.extend DefiniteArticle; :def
           when :indef then self.extend IndefiniteArticle; :indef
           else raise e(%{sorry, bad article type: "#{type.inspect}"})
-          end          
+          end
         end
       end
 
