@@ -2,6 +2,7 @@
 require 'hipe-core'
 require 'hipe-core/struct/hash-like-write-once-extension'
 require 'ruby-debug'
+require 'orderedhash'
 require File.expand_path(File.dirname(__FILE__)+'/../bacon-test-strap')
 
 class XyzzyException < Exception
@@ -62,5 +63,19 @@ describe Hipe::HashLikeWriteOnceExtension do
     val.should.equal 'not ok'
   end  
   
-  
+  it "should work with an ordered def has (h17)" do
+    @h =  Hipe::HashLikeWriteOnceExtension[OrderedHash.new]    
+    @h.write_once!(:gamma){|key,value| raise XyzzyException.new(%{blah blah #{key}})}
+    @h[:gamma] = 'gammaz'
+    @h[:gamma].should.equal 'gammaz'
+    ['one','two','three'].each{|k| @h[k] = k }
+    e = lambda{@h[:gamma]='beta'}.should.raise(XyzzyException)
+    e.message.should.match %r{blah blah gamma}    
+    ['four','five','siz'].each{|k| @h[k] = k }    
+    @h[:gamma].should.equal 'gammaz'    
+    target = [:gamma,'one','two','three','four','five','siz']
+    keys =  @h.keys
+    keys.should.equal target
+  end
+
 end
