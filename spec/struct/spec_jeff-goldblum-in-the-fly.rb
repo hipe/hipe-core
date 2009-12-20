@@ -4,7 +4,7 @@ require 'orderedhash'
 require 'hipe-core/struct/open-struct-like'
 require 'hipe-core/struct/open-struct-write-once-extension'
 require 'bacon'
-require File.expand_path(File.dirname(__FILE__)+'/../bacon-test-strap')
+require 'hipe-core/test/bacon-extensions'
 require 'ruby-debug'
 include Hipe
 
