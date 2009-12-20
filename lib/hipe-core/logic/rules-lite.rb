@@ -20,21 +20,29 @@ module Hipe
       @rules[name] = Rule.new(name,&block)
     end
     # @return the first Rule that matched or nil
-    def assert(hash)
-      raise e(%{Rules assert must take a hash-like object, not #{hash}}) unless
+    def apply(hash)
+      raise TypeError.new(%{RulesLite#apply must take a hash-like object, not #{hash}}) unless
         (hash.respond_to?(:[]) and hash.respond_to?(:keys))
-      context = EvaluationContext.new(hash)
-      @rules.each do |name, rule|
-        if context.instance_eval(&rule.condition)
-          rs = context.instance_eval(&rule.consequence)
-          return rs
+      context = EvaluationContext.new(hash,@rules)
+      result = nil
+      begin
+        loop_result = catch(:stop_loop) do
+          @rules.each do |name, rule|
+            next unless rule.condition
+            context.rule = rule
+            if context.instance_eval(&rule.condition)
+              result = context.run(rule.consequence)
+              break
+            end
+          end
         end
-      end
-      nil
+      end while (loop_result && loop_result[:because] == :re_evaluate )
+      result
     end
     class Rule
       include Common
       attr_reader :condition
+      attr_reader :name
       def initialize(name,&block)
         @name = name
         @condition = nil
@@ -53,7 +61,11 @@ module Hipe
       end
     end
     class EvaluationContext
-      def initialize(hash)
+      attr_reader :rules
+      attr_accessor :rule
+      def initialize(hash, rules)
+        @reevaluated_from = {}
+        @rules = rules
         @hash = hash
         meta = class << self; self; end
         hash.each do |key,value|
@@ -63,7 +75,20 @@ module Hipe
         end
       end
       def has?(key)
-        @has.key_exists?(key)
+        @hash.key_exists?(key)
+      end
+      def run(consequence)
+        instance_eval(&consequence)
+      end
+      # Apply the consequence of the rule w/o evaluating the conditions!
+      #
+      def apply(rule_name)
+        run @rules[rule_name].consequence
+      end
+      def reevaluate()
+        throw(:stop_loop, :because=>:avoid_infinite_loop) if @reevaluated_from[rule.name]
+        @reevaluated_from[rule.name] = true
+        throw(:stop_loop, :because=>:re_evaluate)
       end
     end
   end

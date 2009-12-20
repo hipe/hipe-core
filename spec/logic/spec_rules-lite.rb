@@ -1,7 +1,8 @@
 # bacon spec/logic/spec_rules-lite.rb
 require 'bacon'
-require File.expand_path(File.dirname(__FILE__)+'/../bacon-test-strap')
+require 'hipe-core/test/bacon-extensions'
 require 'hipe-core/logic/rules-lite'
+require 'ostruct'
 require 'ruby-debug'
 
 describe Hipe::RulesLite do
@@ -14,12 +15,12 @@ describe Hipe::RulesLite do
       end
     end
     result = {}
-    result = @r.assert(:t => true)
+    result = @r.apply(:t => true)
     result.should.equal 'true'
   end
 
-  it "fails when assert is not hash like (rl2)" do
-    e = lambda{ @r.assert(NilClass) }.should.raise(Hipe::Exception)
+  it "throws TypeError when apply is used against something not hash like(rl2)" do
+    e = lambda{ @r.apply(NilClass) }.should.raise(TypeError)
     e.message.should.match %r{must take a hash-like}
   end
 
@@ -29,12 +30,44 @@ describe Hipe::RulesLite do
   end
 
   it "returns nil on no match (rl4)" do
-    rs = @r.assert(:t => false)
+    rs = @r.apply(:t => false)
     rs.should.equal nil
   end
 
   it "raises NameError on bad name in condition (rl5)" do
-    lambda{ rs = @r.assert(:u => true) }.should.raise(NameError)
+    lambda{ rs = @r.apply(:u => true) }.should.raise(NameError)
   end
 
+  it "should allow rules to reevalutate (rl6)" do
+    @r = Hipe::RulesLite.new do
+      rule "false at first" do
+        condition { you.age >= 21 }
+        consequence { 'have a drink' }
+      end
+      rule "get fake id if you know the right guy" do
+        condition { you.know == 'dave' }
+        consequence{   you.age = 21;  reevaluate  }
+      end
+    end
+    you = OpenStruct.new(:know=>'bill', :age=>20)
+    @r.apply( :you => you ).should.equal nil
+    you.know = 'dave'
+    @r.apply( :you => you ).should.equal 'have a drink'
+  end
+
+  it "should prevent rules from entering infinute loop when reevalutationg (rl7)" do
+
+    @r = Hipe::RulesLite.new do
+      rule "false at first" do
+        condition { you.age >= 21 }
+        consequence { 'have a drink' }
+      end
+      rule "get your age set to 19 if you know dave" do
+        condition { you.know == 'dave' }
+        consequence{   you.age = 19;  reevaluate  }
+      end
+    end
+    you = OpenStruct.new(:know=>'dave', :age=>20)
+    @r.apply( :you => you ).should.equal nil
+  end
 end
