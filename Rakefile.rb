@@ -41,7 +41,7 @@ task :bacon do
   require 'open3'
   require 'scanf'
   require 'matrix'
-  
+
   specs = FileList[RakefileConfig[:spec][:bacon][:pattern]]
 
   some_failed = false

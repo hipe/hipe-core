@@ -1,5 +1,5 @@
-require 'hipe-core/erroneous'
-require 'hipe-core/open-struct-like'
+require 'hipe-core/infrastructure/erroneous'
+require 'hipe-core/struct/open-struct-like'
 require 'hipe-core/io/all'
 
 module Hipe
@@ -16,4 +16,4 @@ module Hipe
       end
     end
   end
-end  
+end

@@ -33,20 +33,20 @@ module Hipe
     extend Methods
 
     module FormattableString
-      def self.new(s)
-        other = s.dup       # this caused some bugs when we didn't dup it, when running the same code twice
+      def self.[](str)
+        other = (String === str) ? str.dup : str.to_s
+        # this caused some bugs when we didn't dup it, when running the same code twice
+        # we dup it only if it is a string, no need to incur the overhead. but str.to_s returns self
         other.extend self
         other
       end
       def word_wrap_once!(length)
         re = /^(.{0,#{length}})(?:\s+|$)(.*)/
         md = re.match(self)
-        if (md)
+        if (md)  # shouldn't ever fail the above regex as long as we are string, no? but just to be sae
           first_line, remainder = md.captures
           self.replace(remainder)
           first_line
-        else
-          ''
         end
       end
 

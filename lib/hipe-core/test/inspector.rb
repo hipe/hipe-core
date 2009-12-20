@@ -1,4 +1,4 @@
-#@deprecated note i stopped using this when i started using ruby-debug
+#@deprecated i completely stopped using this when i started using ruby-debug
 require 'pp'
 module Hipe
   module Inspector

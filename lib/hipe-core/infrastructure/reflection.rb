@@ -1,3 +1,4 @@
+# @deprected! @todo remove
 module Hipe
   module Reflection
     def self.local_instance_methods(obj)
