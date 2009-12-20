@@ -1,6 +1,6 @@
-== future
-  * 95% coverage
-== 0.0.3 / 2009-12-15 == NOT TAGGED AS RELEASE YET!
+== 0.0.3 / 2009-12-20
+  * 93.47% covered
+  * Complete test coverage for language production module
   * tiny hipe-core command line app to test wordwrap!
   * Lots of little utilities and extension modules, some fully tested, some half-baked
   * Yet another restructuring of where we keep files

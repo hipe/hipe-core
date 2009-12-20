@@ -1,12 +1,12 @@
-# abstract a file into a stack (or stream) of lines that you can either "peek" or "pop"
-# maybe look at the FileString library that apeiros was working on
-# close the file when you get to the last line
-
-# should check out github/apeiros/FileString and killerfox/File::Tie (Tie::File)
-
 require 'hipe-core'  # for Exception
 
-module ::Hipe::Io::StackOfLinesLike
+module ::Hipe::Io::StackLike
+  # abstract a file into a stack (or stream) of lines that you can either "peek" or "pop"
+  # maybe look at the FileString library that apeiros was working on
+  # close the file when you get to the last line
+
+  # should check out github/apeiros/FileString and killerfox/File::Tie (Tie::File)
+  
   def self.[](io)
     if (IO === io)
       io.extend self
