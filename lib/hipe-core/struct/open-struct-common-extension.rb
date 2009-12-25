@@ -23,11 +23,11 @@ module Hipe
       ostruct
     end
     def [](key)
-      raise TypeError, %{symbols or strings keys only, not #{key}} unless String===key or Symbol===key
+      raise TypeError, %{symbols or strings keys only, not #{key.inspect}} unless String===key or Symbol===key
       send(key)
     end
     def []=(key,value)
-      raise TypeError, %{symbols or strings keys only, not #{key}} unless String===key or Symbol===key
+      raise TypeError, %{symbols or strings keys only, not #{key.inspect}} unless String===key or Symbol===key
       send(%{#{key}=}, value)
     end
     def use_ordered_hash!
