@@ -1,4 +1,5 @@
-#@deprecated i completely stopped using this when i started using ruby-debug
+# @deprecated i completely stopped using this when i started using ruby-debug
+# it's just an awful echo debugging formatter
 require 'pp'
 module Hipe
   module Inspector

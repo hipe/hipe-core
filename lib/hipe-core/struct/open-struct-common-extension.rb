@@ -32,8 +32,17 @@ module Hipe
     end
     def use_ordered_hash!
       require 'orderedhash'
-      @table = OrderedHash.new(@table)
+      raise "use_ordered_hash! must happen before you add any values" unless @table.size == 0
+      @table = OrderedHash.new()
     end
+    def merge!(hash)
+      hash.each{|key,value| self[key] = value}
+      self
+    end
+    def delete(*args); @table.delete(*args) end
+    def keys; @table.keys; end
+    def each(&b); @table.each(&b); end
+    def to_hash; @table.dup end
     def open_struct_common_extension_init
       class << self
         attr_accessor :table

@@ -1,6 +1,6 @@
 module Hipe
   module Core
-    VERSION = '0.0.3'
+    VERSION = '0.0.4'
   end
 
   module Io;      end
@@ -15,10 +15,11 @@ module Hipe
         when 1 then args[0].respond_to?(:[]) ? args[0] : {args[0].class => args[0]}
         else {Array => args}
       end
-      super(string)
+      super(string) if string
     end
+    # subclasses might make this some kind of factory method
     def self.[](*args)
-      return Exception.new(*args)
+      return self.new(*args)
     end
   end
 end

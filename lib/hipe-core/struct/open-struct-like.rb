@@ -38,7 +38,7 @@ module Hipe
     end
 
     def method_missing(method_name, *args)
-      @open_struct.method_missing(method_name, *args)
+      @open_struct.send(method_name, *args)
     end
 
     #def fetch(key)

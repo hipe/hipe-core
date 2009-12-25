@@ -21,7 +21,7 @@ module Hipe
       @rules[name] = Rule.new(name,&block)
     end
     # @return the first Rule that matched or nil
-    def apply(hash)
+    def assess(hash)
       raise TypeError.new(%{RulesLite#apply must take a hash-like object, not #{hash}}) unless
         (hash.respond_to?(:[]) and hash.respond_to?(:keys))
       context = EvaluationContext.new(hash,@rules)

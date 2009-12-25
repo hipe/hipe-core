@@ -1,6 +1,7 @@
 # this was started before i discovered http://www.deveiate.org/projects/Linguistics/
 # indeed i continued to work on it after i discoverd the above link, which i haven't looked at yet.
 require 'hipe-core' # for exceptions
+require 'hipe-core/struct/open-struct-common-extension'
 require 'hipe-core/struct/open-struct-write-once-extension'
 require 'hipe-core/logic/rules-lite'
 
@@ -71,45 +72,7 @@ module Hipe
           }
         end
 
-
-
-        #rule 'article is definite and count is available and say_count is true' do
-        #  condition   { DefiniteArticle === np.artp && np.size && np.say_count}
-        #  consequence do
-        #    apply '# apply the count'
-        #    tokens.unshift('the');
-        #  end
-        #end
-
-        #rule 'no article is available and count is zero' do
-        #  condition { np.artp.nil? && np.size == 0}
-        #  consequence {
-        #    apply
-        #  }
-        #end
-        #
-        #rule 'article is indef and count is available' do
-        #  condition { IndefiniteArticle===np.artp && np.size }
-        #  consequence do
-        #    apply '# apply indef article'
-        #  end
-        #end
-        #
-        #rule 'article is indef and no count is available' do
-        #  condition {  IndefiniteArticle===np.artp && !np.size }
-        #  consequence {
-        #    np.size = 1
-        #    apply 'article is indef and count is available'
-        #  }
-        #end
-        #
-        #rule 'no article is available and no count is available' do
-        #  condition {  !np.artp && !np.size }
-        #  consequence {
-        #    np.artp = En.artp(:indef)
-        #    apply 'article is indef and no count is available'
-        #  }
-        #end
+        # many other rules were in 28c36c45705610165e427d1d4fa5448722fdf837
 
         rule '# count' do
           consequence do
@@ -229,7 +192,7 @@ module Hipe
         def flatten(arr)
           @vp = ToBe.new()  # hack4 - no verbs yet
           @vp.agent = @np
-          SentenceRules.apply({:tokens => arr, :vp => @vp, :np => @np, :list=>@np.list})
+          SentenceRules.assess({:tokens => arr, :vp => @vp, :np => @np, :list=>@np.list})
           arr
         end
       end
@@ -251,24 +214,42 @@ module Hipe
             opts = args.pop
             @say_count = opts[:say_count]
           end
-          o = OpenStructWriteOnceExtension.new()
-          o.write_once!(*(them=[:adjp, :artp, :list, :pp, :root, :size]))
-          args.each do |arg|
-            case arg
-            when Fixnum   then o.size = arg
-            when String   then o.root = arg
-            when Adjp     then o.adjp = arg
-            when Pp       then o.pp   = arg
-            when Array    then o.list = List[arg]
-            when Artp     then o.artp = arg
-            when Symbol
-              rs =
-              o.artp = En.artp(case arg
-                when :the   then :def
-                when :an,:a then :indef
-                else raise e("no") end)
+          o = OpenStructCommonExtension[OpenStructWriteOnceExtension.new()]
+          them = them=[:adjp, :artp, :list, :pp, :root, :size]
+          o.write_once!(*them)
+          begin
+            arg = nil
+            args.each do |arg|
+              case arg
+              when Fixnum   then o.size = arg
+              when String   then o.root = arg
+              when Adjp     then o.adjp = arg
+              when Pp       then o.pp   = arg
+              when Array    then o.list = List[arg]
+              when Artp     then o.artp = arg
+              when Symbol
+                rs =
+                o.artp = En.artp(case arg
+                  when :the   then :def
+                  when :an,:a then :indef
+                  else raise e("no") end)
+              else
+                raise e(%{can't determine part of speec from #{arg.inspect}})
+              end
+            end
+          rescue TypeError => e
+            if e.message.match(%r{can't write to frozen index "([^"]+)"})
+              msg = <<-HERE.gsub(/^#{' '*14}/,'').gsub(/\n/,' ')
+              Sorry, a noun phrase can only have one #{$1}.  (Classes
+              map to noun phrase parts and a noun phrase can only have one of each type.  )
+              Your value for "#{$1}" (#{arg.inspect}) matched an existing value
+              (#{o[$1.to_sym].inspect}).
+              Your arg types were: [#{args.map{|x| x.class.to_s} * ', '}].
+              Your arg values were: [#{args.map{|x| x.inspect} * ', '}]
+              HERE
+              raise self.e(msg)
             else
-              raise e(%{can't determine part of speec from #{arg.inspect}})
+              raise e
             end
           end
           raise e(%{can't have both size and list}) if o.size and o.list
@@ -290,7 +271,7 @@ module Hipe
           @adjp.flatten(arr) if @adjp
           arr << @root + (plurality == :plural ? 's' : '')
           @pp.flatten(arr) if @pp
-          AricleAndCountRules.apply(  :tokens    => arr,       :artp => artp,   :np    => self,
+          AricleAndCountRules.assess(  :tokens    => arr,       :artp => artp,   :np    => self,
             :say_list => say_list,    :say_count => say_count, :list => list,   :size  => size
           )
           array.concat arr

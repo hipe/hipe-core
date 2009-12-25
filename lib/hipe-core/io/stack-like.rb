@@ -6,7 +6,7 @@ module ::Hipe::Io::StackLike
   # close the file when you get to the last line
 
   # should check out github/apeiros/FileString and killerfox/File::Tie (Tie::File)
-  
+
   def self.[](io)
     if (IO === io)
       io.extend self

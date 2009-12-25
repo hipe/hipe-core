@@ -1,3 +1,10 @@
+# This file is copy-pasted into other gems (and versioned there) but this here is the official version
+# which officially lives in github.com/hipe/hipe-core..etc.  This is a list of the other projects
+# that use this file, when you change it here make sure it doesn't break there
+#  - hipe-cli
+#  - hipe-sosy
+
+
 # this file was originally copy-pasted from webrat's Thorfile.  Thank you Bryan Helmkamp!
 module GemHelpers
 

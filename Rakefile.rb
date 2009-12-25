@@ -2,6 +2,7 @@
 # which officially lives in github.com/hipe/hipe-core..etc.  This is a list of the other projects
 # that use this file, when you change it here make sure it doesn't break there
 #  - hipe-cli
+#  - hipe-sosy
 
 # require 'spec/rake/spectask'
 require 'rcov/rcovtask'

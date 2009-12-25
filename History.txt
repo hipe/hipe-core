@@ -1,3 +1,9 @@
+== 0.0.4 (NOT TAGGED NOT RELEASED)
+  * Added Hipe::Test::Helper for managing the writing of files during tests
+  * Test/BaconExtensions: 
+  * Lingual: more helpful error messages when constructing noun phrases
+  * bugfix: change core exception class to actually be a factory
+  * add merge! to openstruct common extension
 == 0.0.3 / 2009-12-20
   * 93.47% covered
   * Complete test coverage for language production module
@@ -17,3 +23,6 @@
   * ExceptionLike mixin for factory pattern exceptions.
 == 0.0.0 / 2009-11-19
   * broken off from "blog migrator" cli 
+  
+=== FOR THE DISTANT FUTURE:
+  * Predicates in predicate modules should use define_method and not method_missing, mebbe

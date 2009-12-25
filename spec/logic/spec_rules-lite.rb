@@ -15,12 +15,12 @@ describe Hipe::RulesLite do
       end
     end
     result = {}
-    result = @r.apply(:t => true)
+    result = @r.assess(:t => true)
     result.should.equal 'true'
   end
 
-  it "throws TypeError when apply is used against something not hash like(rl2)" do
-    e = lambda{ @r.apply(NilClass) }.should.raise(TypeError)
+  it "throws TypeError when assess is used against something not hash like(rl2)" do
+    e = lambda{ @r.assess(NilClass) }.should.raise(TypeError)
     e.message.should.match %r{must take a hash-like}
   end
 
@@ -30,12 +30,12 @@ describe Hipe::RulesLite do
   end
 
   it "returns nil on no match (rl4)" do
-    rs = @r.apply(:t => false)
+    rs = @r.assess(:t => false)
     rs.should.equal nil
   end
 
   it "raises NameError on bad name in condition (rl5)" do
-    lambda{ rs = @r.apply(:u => true) }.should.raise(NameError)
+    lambda{ rs = @r.assess(:u => true) }.should.raise(NameError)
   end
 
   it "should allow rules to reevalutate (rl6)" do
@@ -50,9 +50,9 @@ describe Hipe::RulesLite do
       end
     end
     you = OpenStruct.new(:know=>'bill', :age=>20)
-    @r.apply( :you => you ).should.equal nil
+    @r.assess( :you => you ).should.equal nil
     you.know = 'dave'
-    @r.apply( :you => you ).should.equal 'have a drink'
+    @r.assess( :you => you ).should.equal 'have a drink'
   end
 
   it "should prevent rules from entering infinute loop when reevalutationg (rl7)" do
@@ -68,6 +68,6 @@ describe Hipe::RulesLite do
       end
     end
     you = OpenStruct.new(:know=>'dave', :age=>20)
-    @r.apply( :you => you ).should.equal nil
+    @r.assess( :you => you ).should.equal nil
   end
 end

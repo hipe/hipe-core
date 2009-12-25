@@ -5,38 +5,28 @@ module Hipe
     def modules=(mods)
       @exception_modules = mods
     end
-    def factory (string,details={})
+    def factory(*args)
+      details = args.detect{|x| x.respond_to? :[]}
       @exception_modules ||= []
       use_this_class = nil
-      if (details[:type])
-        if @exception_modules.size == 0
-          string << %{(no exception_modules registered.)}
-        else
-          class_name = details[:type].to_s.gsub(/(?:^|_)([a-z])/){$1.upcase}
-          @exception_modules.each do |mod|
-            if mod.constants.include? class_name
-              use_this_class = mod.const_get class_name
-              break
-            end
+      if (details && details[:type])
+        class_name = details[:type].to_s.gsub(/(?:^|_)([a-z])/){$1.upcase}
+        @exception_modules.each do |mod|
+          if mod.constants.include? class_name
+            use_this_class = mod.const_get class_name
+            break
           end
         end
       end
-      if (use_this_class.nil?)
-        if (@default_exception_class)
-          use_this_class = @default_exception_class
-        else
-          string << %{(#{details.inspect})} if (!details.respond_to?(:size) || details.size > 0)
-          use_this_class = self
-        end
-      end
+      use_this_class ||=  ( @default_exception_class || self )
       arity = use_this_class.method('new').arity
-      args = [string,details]
-      if ((0..1) === arity)
-        string << %{(exception class airity: #{arity})}
-        args.slice!(arity,args.size-arity)
+      if arity > 0 && arity < args.size
+        sliced = args.slice!(arity.abs,args.size-arity)
+        details[:sliced] = sliced if details
       end
       return use_this_class.new(*args)
     end
+    alias_method :[], :factory
   end
 
   module ExceptionLike

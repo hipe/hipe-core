@@ -56,7 +56,8 @@ module Hipe
           if (@on_clobber)
             return @on_clobber.call(name)
           else
-            raise TypeError.new %{can't write to frozen index "#{my_name}"}
+            raise TypeError.new %{can't write to frozen index "#{my_name}" -- }+
+              %{already occupied by #{send(my_name).inspect}}
           end
         elsif true==@write_once or @write_once[my_name]
           @orig_mm.call(name,*args)
