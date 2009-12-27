@@ -355,6 +355,32 @@ module Hipe
           Hipe::Lingual::List.join self, ', ', ' and ', &block
         end
       end
+      
+      module Helpers
+        SEC_PER_MIN = 60
+        SEC_PER_HOUR = SEC_PER_MIN * 60
+        SEC_PER_DAY = SEC_PER_HOUR * 24
+        SEC_PER_WEEK = SEC_PER_DAY * 7
+        SEC_PER_MONTH = SEC_PER_WEEK * 4
+
+        # action_view was too heavy to pull in just for this
+        def time_ago_in_words(t)
+          seconds_ago = (Time.now - t)
+          in_future = seconds_ago <= 0 
+          distance = seconds_ago.abs
+          amt, unit, fmt = case distance
+            when (0..SEC_PER_MIN)              then [distance,              'second', '%.0f']
+            when (SEC_PER_MIN..SEC_PER_HOUR)   then [distance/SEC_PER_MIN,  'minute', '%.1f']
+            when (SEC_PER_HOUR..SEC_PER_DAY)   then [distance/SEC_PER_HOUR, 'hour',   '%.1f']
+            when (SEC_PER_DAY..SEC_PER_WEEK)   then [distance/SEC_PER_DAY,  'day',    '%.1f']
+            else                                    [distance/SEC_PER_WEEK, 'week',   '%.1f']
+          end
+          number = ((amt.round - amt).abs < 0.1) ? amt.round : fmt.t(amt)
+          noun =  ('1' == number.to_s) ? unit : unit.pluralize
+          %{#{number} #{noun} #{in_future ? 'from now' : 'ago'}}
+        end      
+      
+      end # Helpers
     end # En
     List = En::List
     def self.list(array)

@@ -29,9 +29,10 @@ module ::Hipe::Io::StackLike
 
   def sol_init # tried making this protected but no
     class << self
-      attr_reader :peek
+      attr_reader :peek, :offset
     end
     sol_raise "must be an open filehandle" unless (File === self && !closed?)
+    @offset = -1
     sol_update_peek
   end
 
@@ -41,7 +42,11 @@ module ::Hipe::Io::StackLike
   # although we are clobbering "peek()" (and @peek) because its too concise not to.
   def sol_update_peek
     @peek = gets
-    close if @peek.nil?
+    if (@peek.nil?)
+      close
+    else
+      @offset += 1
+    end
   end
 
   def sol_raise(msg,details={})

@@ -14,6 +14,15 @@ module Hipe
         @data.extend OpenStructLike
         @string = BufferString.new('')
       end
+      def to_s
+        if (!valid?)
+          errors.map{|x| x.to_s} * '  '
+        elsif (@string.length > 0)
+          @string
+        else
+          inspect
+        end
+      end
       def self.[](mixed)
         response = self.new
         if (Exception===mixed)
