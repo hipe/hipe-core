@@ -14,33 +14,33 @@ describe Hipe::OpenStructExtended do
   it "should keys like hash (ose1)" do
     @hash = {:alpha=>'ALPHA', 'beta'=>'BETA', :gamm_ma => 'GAMMA' }
     @ose  = Hipe::OpenStructExtended.new(@hash)
-    gauntlet[:keys].call(@hash).should.equal gauntlet[:keys].call(@ose)
+    gauntlet[:keys].call(@hash).should.equal gauntlet[:keys].call(@ose._table)
   end
 
   it "should has_key? like hash (ose2)" do
-    gauntlet[:has_key?].call(@hash,:no).should.equal gauntlet[:has_key?].call(@ose,:no)
-    gauntlet[:has_key?].call(@hash,:alpha).should.equal gauntlet[:has_key?].call(@ose,:alpha)
+    gauntlet[:has_key?].call(@hash,:no).should.equal gauntlet[:has_key?].call(@ose._table,:no)
+    gauntlet[:has_key?].call(@hash,:alpha).should.equal gauntlet[:has_key?].call(@ose._table,:alpha)
     @ose.has_key?(:no).should.equal false
     @ose.has_key?(:alpha).should.equal true
   end
 
   it "should confuse you (ose3)" do
     @ose.table.object_id.should.not.equal @hash.object_id
-    gauntlet[:each].call(@ose)
+    gauntlet[:each].call(@ose._table)
     gauntlet[:each].call(@hash)
-    (@ose.values.sort.to_s + @hash.values.sort.to_s).should.equal "ALPHA!!BETA!!GAMMA!!ALPHA!!BETA!!GAMMA!!"
+    (@ose._table.values.sort.to_s + @hash.values.sort.to_s).should.equal "ALPHA!!BETA!!GAMMA!!ALPHA!!BETA!!GAMMA!!"
   end
 
   it "should confuse you still (ose4)" do
     @hash = {:alpha=>'ALPHA'}
     @ose  = Hipe::OpenStructExtended.new(@hash.dup)
-    @ose.table[:alpha] << 'blah'
+    @ose._table[:alpha] << 'blah'
     @hash[:alpha].should.equal "ALPHAblah"
   end
 
   it "should delete like hash (ose5)" do
-    gauntlet[:delete].call(@ose,:alpha).should.equal gauntlet[:delete].call(@hash,:alpha)
-    gauntlet[:delete].call(@ose,:not_there).should.equal gauntlet[:delete].call(@hash,:not_there)
+    gauntlet[:delete].call(@ose._table,:alpha).should.equal gauntlet[:delete].call(@hash,:alpha)
+    gauntlet[:delete].call(@ose._table,:not_there).should.equal gauntlet[:delete].call(@hash,:not_there)
     @ose.to_hash.should.equal @ose.symbolize_keys_of(@hash)
   end
 

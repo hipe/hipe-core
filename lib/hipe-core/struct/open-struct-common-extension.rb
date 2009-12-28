@@ -8,10 +8,10 @@ module Hipe
     #     o.author_name = 'murakami'
     #     puts o.author_name        #=>
     #     puts o[:author_name]      #=> 'murakami'
-    #     o.table.keys              #=> [:author]
-    #     o.table.size              #=> 1
+    #     o._table.keys              #=> [:author]
+    #     o._table.size              #=> 1
     #
-    # Note: Any method that's defined here, your data member can't have such a field name, e.g. 'table'
+    # Note: Any method that's defined here, your data member can't have such a field name, e.g. '_table'
     #
     # Warning: this overrides the encapsulation that Openstruct gives its internal hash.
     # This makes is fragile both because the OpenStruct implementation might change,
@@ -58,8 +58,8 @@ module Hipe
           throw :FAIL, "won't compare elements of different classes: #{left.class} and #{right.class}"
         elsif (left.kind_of?(Hash) || left.kind_of?(OpenStructCommonExtension))
           if (left.kind_of?(OpenStructCommonExtension))
-            left = left.table
-            right = right.table
+            left = left._table
+            right = right._table
           end
           deep_merge_strict!(left, right, path)
         elsif(left.kind_of?(Array) || left.kind_of?(String))
@@ -79,7 +79,7 @@ module Hipe
         os.kind_of? OpenStructCommonExtension
       path = []
       fail = catch(:FAIL) do
-        OpenStructCommonExtension.deep_merge_strict!(@table, os.table, path)
+        OpenStructCommonExtension.deep_merge_strict!(@table, os._table, path)
         false
       end
       if (fail)
@@ -87,19 +87,17 @@ module Hipe
       end
     end
 
-    [:delete,:each,:keys,:has_key?,:values].each do |name|
+    [:delete,:each,:has_key?].each do |name|    # :values :keys,
       define_method(name){ |*args, &block| @table.send(name,*args,&block) }
     end
 
     def to_hash; @table.dup end
     def open_struct_common_extension_init
-      class << self
-        attr_accessor :table
-      end
     end
 
     # use this at your own risk!!!
-    def table; @table end
+    # crappy name b/c the namespace of os should in theory by wide open (it's not)
+    def _table; @table end
 
     # just for testing ?
     def symbolize_keys_of(hash)

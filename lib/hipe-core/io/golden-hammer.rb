@@ -22,19 +22,22 @@ module Hipe
           other.kind_of?(GoldenHammer)
         @string << other.string
         @messages.concat other.messages
-        @data.merge_recursive_strict! other.data
+        @data.deep_merge_strict! other.data
       end
       # assumes ascii context
       def to_s
         if (!valid?)
           errors.map{|x| x.to_s} * '  '
         elsif (@string.length > 0 || @messages.size > 0)
-          messages = @messages.dup
-          messages.unshift(@string) if @string.length > 0
-          messages * "\n"
+          all_messages * "\n"
         else
           inspect
         end
+      end
+      def all_messages
+        messages = @messages.dup
+        messages.unshift(@string) if @string.length > 0
+        messages
       end
       def self.[](mixed)
         response = self.new
