@@ -5,22 +5,22 @@ require 'orderedhash'
 
 module Hipe
   class Table
-  
+
     # Hipe::Table is an abstract representation of a table intended to allow:
     #  - dynamic addition and removal of rows and columns
     #    - at runtime you may not want to show certain columns based on some criteria
     #  - a representation of the data abstract enough so that it can be used in different view contexts, e.g.
     #    - to render ascii output to a terminal
     #    - to render html, xml, csv, json, yaml, etc
-    # 
+    #
     #  (the reason we made a class for it was because we kept changing the implementation in GoldenHammer --
     #  Not sure what combination of Set, SortedSet, OrderedHash (molic), AS3 OrderedHash, OpenStruct or Mash
     #  we will eventually use, so we needed to insulate the implementation from some kind of spec for this.)
     #
     #  Despite MVC wisdom, Hipe::Table will provide a default renderer for :ascii contexts
-    
+
     extend StrictSetterGetter
-  
+
     protected
       def initialize
         @fields = []
@@ -30,9 +30,9 @@ module Hipe
       end
 
       def self.humanize_lite(str)
-        str.to_s.gsub('_',' ')         
+        str.to_s.gsub('_',' ')
       end
-      
+
     public
     attr_accessor :fields
     attr_reader :list
@@ -48,7 +48,7 @@ module Hipe
 
     def field(*args,&block)
       if block
-        f = Field.new(self,*args,&block)  
+        f = Field.new(self,*args,&block)
         raise ArgumentError.new("Can't redefine field: #{f.name.inspect}") if @fields_by_name[f.name]
         @fields << f
         @fields_by_name[f.name] = f
@@ -62,7 +62,7 @@ module Hipe
       raise TypeError.new("list must be enumerable") unless list.kind_of? Enumerable
       @list = list
     end
-  
+
     def renderer(name,&block)
       if (block)
         renderer = (@renderers[name] ||= PreRenderingAsciiRenderer.new)
@@ -80,11 +80,11 @@ module Hipe
         @renderers[name]
       end
     end
-  
+
     def render(renderer_name)
       renderer(renderer_name).render(self)
     end
-  
+
     class Field
       extend StrictSetterGetter
       symbol_setter_getter :name
@@ -93,7 +93,7 @@ module Hipe
       # integer_setter_getter :max_width, :min=>1
       string_setter_getter :label
       block_setter_getter :renderer
-    
+
       def initialize(table,*args,&block)
         @table = table
         @visible = true
@@ -122,12 +122,12 @@ module Hipe
           opts.merge! their_opts
         end
         raise ArgumentError.new("Fields must have names") unless opts[:name]
-        raise TypeError.new("For now fields must have blocks (#{opts[:name]})") unless block                
+        raise TypeError.new("For now fields must have blocks (#{opts[:name]})") unless block
         set opts
         @renderer = block
       end
       def hide
-        @visible = false 
+        @visible = false
       end
       def show
         @visible = true
@@ -135,18 +135,18 @@ module Hipe
       def label
         @label || @table.labelize.call(@name)
       end
-      protected 
+      protected
       def set(hash)
         hash.each do |key,value|
           meth = %{#{key}=}
           unless respond_to? meth
-            raise ArgumentError.new("unrecognized option #{key.inspect}") unless respond_to?(meth)                  
-          end  
+            raise ArgumentError.new("unrecognized option #{key.inspect}") unless respond_to?(meth)
+          end
           send(meth, value)
         end
       end
     end
-    
+
     # this renders in two passes so it can set appropriate column widths for ascii\
     # probably not appropriate for html etc unless we are really lazy and performance isn't an issue
     class PreRenderingAsciiRenderer
@@ -160,7 +160,7 @@ module Hipe
       def set_defaults
         @left         ||= '|  '
         @right        ||= ' |'
-        @separator    ||= ' |  ' 
+        @separator    ||= ' |  '
         @top          ||= self.class.lines
         @bottom       ||= self.class.lines
         @after_header ||= self.class.lines
@@ -168,7 +168,7 @@ module Hipe
       def render(table)
         # pre-render to calculate min_widths from actual values
         show_fields = table.fields.select{|f| f.visible? }
-        min_widths = show_fields.map{|field| table.show_header ? (field.min_width || field.label.length) : 0  }  
+        min_widths = show_fields.map{|field| table.show_header ? (field.min_width || field.label.length) : 0  }
         rows = []
         table.list.each do |item|
           row = []
@@ -180,9 +180,9 @@ module Hipe
           end
           rows << row
         end
-        table_width = @left.length + @right.length + min_widths.reduce(:+) + 
+        table_width = @left.length + @right.length + min_widths.reduce(:+) +
           ([show_fields.size-1,0].max * @separator.length)
-        
+
         # render
         out = Hipe::Io::BufferString.new
         out.puts @top.call(table_width) if @top
@@ -209,6 +209,6 @@ module Hipe
         out.puts @bottom.call(table_width) if @bottom
         out
       end
-    end    
+    end
   end
 end

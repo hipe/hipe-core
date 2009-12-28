@@ -5,7 +5,7 @@ module Loquacious
       range.extend RangeLike
       range
     end
-    
+
     def excludes?(value)
       if self === value
         false
@@ -28,7 +28,7 @@ module Loquacious
       if @exclusive
         ((@begin && thing <  @begin) || (@end && thing > @end )) ? false : true
       else
-        ((@begin && thing <= @begin) || (@end && thing >= @end )) ? false : true        
+        ((@begin && thing <= @begin) || (@end && thing >= @end )) ? false : true
       end
     end
   end
