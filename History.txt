@@ -1,4 +1,6 @@
 == 0.0.4 (NOT TAGGED NOT RELEASED)
+  * OpenStructExtended can now do deep_merge_strict!
+  * GoldenHammer matures?
   * Added Hipe::Test::Helper for managing the writing of files during tests
   * Test/BaconExtensions: 
   * Lingual: more helpful error messages when constructing noun phrases

@@ -46,6 +46,10 @@ module Hipe
       t
     end
 
+    def visible_fields
+      fields.select{|f| f.visible? }
+    end
+
     def field(*args,&block)
       if block
         f = Field.new(self,*args,&block)
@@ -166,30 +170,31 @@ module Hipe
         @after_header ||= self.class.lines
       end
       def render(table)
+        return "(list is not set)" unless table.list
         # pre-render to calculate min_widths from actual values
-        show_fields = table.fields.select{|f| f.visible? }
-        min_widths = show_fields.map{|field| table.show_header ? (field.min_width || field.label.length) : 0  }
+        visible_fields = table.visible_fields
+        min_widths = visible_fields.map{|field| table.show_header ? (field.min_width || field.label.length) : 0  }
         rows = []
         table.list.each do |item|
           row = []
-          show_fields.each_with_index do |field,index|
+          visible_fields.each_with_index do |field,index|
             next unless field.visible?
-            rendered = field.renderer.call(item)
+            rendered = field.renderer.call(item).to_s
             min_widths[index] = rendered.length if rendered.length > min_widths[index]
             row << rendered
           end
           rows << row
         end
         table_width = @left.length + @right.length + min_widths.reduce(:+) +
-          ([show_fields.size-1,0].max * @separator.length)
+          ([visible_fields.size-1,0].max * @separator.length)
 
         # render
         out = Hipe::Io::BufferString.new
         out.puts @top.call(table_width) if @top
         if table.show_header?
           out << @left
-          out << show_fields.map do |field|
-            min_width = field.min_width || min_widths[show_fields.index(field)]
+          out << visible_fields.map do |field|
+            min_width = field.min_width || min_widths[visible_fields.index(field)]
             str = sprintf(%{%#{min_width}s}, field.label)
             str
           end.join(@separator)
@@ -201,7 +206,7 @@ module Hipe
         rows.each do |row|
           out << @left
           out << row.each_with_index do |cel, idx|
-            min_width = show_fields[idx].min_width || min_widths[idx]
+            min_width = visible_fields[idx].min_width || min_widths[idx]
             row[idx] = sprintf(%{%#{min_width}s},cel)
           end.join(@separator)
           out.puts @right

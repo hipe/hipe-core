@@ -1,3 +1,4 @@
+# bacon spec/struct/spec_open-struct-common-extension.rb
 module Hipe
   module OpenStructCommonExtension
     # Adds a few things things to OpenStruct that you wish it had, like member variable reflection.
@@ -36,17 +37,75 @@ module Hipe
       @table = OrderedHash.new()
     end
     def merge!(hash)
+      raise TypeError.new("need hash have #{hash.inspect}") unless hash.kind_of? Hash
       hash.each{|key,value| self[key] = value}
       self
     end
-    def delete(*args); @table.delete(*args) end
-    def keys; @table.keys; end
-    def each(&b); @table.each(&b); end
+
+    protected
+    def self.deep_merge_strict!(hash1, hash2, path)
+      middle = hash1.keys & hash2.keys
+      right = hash2.keys - hash1.keys
+      right.each do |key|
+        hash1[key] = hash2[key]
+      end
+      i = path.size
+      path.push(nil)
+      middle.each do |key|
+        path[i] = key
+        left = hash1[key]; right = hash2[key]
+        if left.class != right.class
+          throw :FAIL, "won't compare elements of different classes: #{left.class} and #{right.class}"
+        elsif (left.kind_of?(Hash) || left.kind_of?(OpenStructCommonExtension))
+          if (left.kind_of?(OpenStructCommonExtension))
+            left = left.table
+            right = right.table
+          end
+          deep_merge_strict!(left, right, path)
+        elsif(left.kind_of?(Array) || left.kind_of?(String))
+          left.concat right
+        elsif(left == right) # we might add an option for adding Fixnums and Floats
+          next
+        else
+          throw :FAIL, "collision of elements that were not equal: #{left.inspect} and #{right.inspect}"
+        end
+      end
+      path.pop
+    end
+    public
+
+    def deep_merge_strict!(os)
+      raise TypeError.new("need OpenStructCommonExtension have #{os.inspect}") unless
+        os.kind_of? OpenStructCommonExtension
+      path = []
+      fail = catch(:FAIL) do
+        OpenStructCommonExtension.deep_merge_strict!(@table, os.table, path)
+        false
+      end
+      if (fail)
+        raise ArgumentError.new(%{#{fail} at "#{path.map{|x| x.inspect}*'/'}"})
+      end
+    end
+
+    [:delete,:each,:keys,:has_key?,:values].each do |name|
+      define_method(name){ |*args, &block| @table.send(name,*args,&block) }
+    end
+
     def to_hash; @table.dup end
     def open_struct_common_extension_init
       class << self
         attr_accessor :table
       end
+    end
+
+    # use this at your own risk!!!
+    def table; @table end
+
+    # just for testing ?
+    def symbolize_keys_of(hash)
+      hash2 = {}
+      hash.each {|k,v| hash2[k.to_sym] = v}
+      hash2
     end
   end
 end
