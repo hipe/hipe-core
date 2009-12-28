@@ -9,6 +9,7 @@ module Hipe
     #
     module Methods
       def wordwrap text, line_width  # thanks rails
+        throw TypeError.new(%{needed String had #{text.inspect}}) unless text.kind_of? String
         text.split("\n").collect do |line|
           line.length > line_width ? line.gsub(/(.{1,#{line_width}})(\s+|$)/, "\\1\n").strip : line
         end * "\n"
