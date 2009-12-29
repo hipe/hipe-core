@@ -97,6 +97,7 @@ module Hipe
       # integer_setter_getter :max_width, :min=>1
       string_setter_getter :label
       block_setter_getter :renderer
+      symbol_setter_getter :align
 
       def initialize(table,*args,&block)
         @table = table
@@ -206,8 +207,10 @@ module Hipe
         rows.each do |row|
           out << @left
           out << row.each_with_index do |cel, idx|
-            min_width = visible_fields[idx].min_width || min_widths[idx]
-            row[idx] = sprintf(%{%#{min_width}s},cel)
+            field = visible_fields[idx]
+            min_width = field.min_width || min_widths[idx]
+            left = (field.align == :left) ? '-' : ''
+            row[idx] = sprintf(%{%#{left}#{min_width}s},cel)
           end.join(@separator)
           out.puts @right
         end
