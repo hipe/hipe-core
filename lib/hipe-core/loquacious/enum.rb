@@ -18,9 +18,13 @@ module Hipe
         if include? value
           false
         else
-          the_list = self
-          %{Expecting } << en{ list(the_list.map{|x| x.inspect}) }.either() << ".  Had #{value.inspect}."
+          say(value)
         end
+      end
+
+      def say(value)
+        the_list = self
+        %{Expecting } << en{ list(the_list.map{|x| x.inspect}) }.either() << ".  Had #{value.inspect}."
       end
     end
     #class Enum < Array

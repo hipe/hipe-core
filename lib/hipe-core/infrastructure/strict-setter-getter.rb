@@ -53,9 +53,9 @@ module Hipe
         end
         alias_method :block_setter_getter, :block_setter_getters
 
-        def kind_of_setter_getter name, arg, *args
+        def kind_of_each_setter_getter name, arg, *args
           args.unshift(arg)
-          validations = args.map do |mojule| 
+          validations = args.map do |mojule|
             validator = Loquacious::KindOf.new mojule
             lambda do |value|
               if (msg = validator.excludes?(value)) then raise TypeError.new(msg) end
@@ -68,6 +68,23 @@ module Hipe
           attr_reader name
         end
 
+        def kind_of_setter_getter name, arg, *args
+          args.unshift(arg)
+          loquacii = {}
+          args.each do |mojule|
+            loquacii[mojule] = Loquacious::KindOf.new mojule
+          end
+          validations = [lambda do |value|
+            unless (success = loquacii.detect{|x| value.kind_of?(x[0])})
+              raise TypeError.new(Loquacious::EnumLike[args].say(value.class))
+            end
+          end]
+          define_method(%{#{name}=}) do |value|
+            validations.each{ |validation| validation.call(value) }
+            instance_variable_set(%{@#{name}}, value)
+          end
+          attr_reader name
+        end
 
         def boolean_setter_getters *args
           args.each do |name|

@@ -13,13 +13,14 @@ end
 class SomeClass
   extend Hipe::StrictSetterGetter
   symbol_setter_getter :cartoon_character, :enum => [:beavis, :butthead]
-  kind_of_setter_getter :duck, DuckLike
+  kind_of_each_setter_getter :duck, DuckLike
+  kind_of_setter_getter :blah, DuckLike, Fixnum
 end
 
 ShouldBeTypeError = begin
   class OtherClass
     extend Hipe::StrictSetterGetter
-    kind_of_setter_getter :duck, ADuck.new
+    kind_of_each_setter_getter :duck, ADuck.new
   end
 rescue TypeError => e; e; end
 
@@ -56,6 +57,17 @@ describe Hipe::StrictSetterGetter do
     ShouldBeTypeError.should.be.kind_of TypeError
     ShouldBeTypeError.message.should.match %r{Module}
     ShouldBeTypeError.message.should.match %r{ADuck}
+  end
+
+  it "new kind_of should work (ssg6)" do
+    @x.blah.should.equal nil
+    d = ADuck.new
+    @x.blah = d
+    (@x.blah.equal? d).should.equal true
+    @x.blah = 7
+    @x.blah.should.equal 7
+    e = lambda{ @x.blah = 7.0 }.should.raise(TypeError)
+    e.message.should.match %r{Expecting either DuckLike or Fixnum\.  Had Float\.}
   end
 
 end
