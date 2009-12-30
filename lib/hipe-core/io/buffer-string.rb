@@ -14,7 +14,7 @@ module Hipe
           mixed.each{|x| puts x}
         else
           self << mixed
-          self << "\n" if (mixed.kind_of? String and mixed.length > 0 and mixed[mixed.size-1] != "\n"[0]) #optparse does this btr
+          self << "\n" if (mixed.kind_of? String and mixed.length == 0 or mixed[mixed.size-1] != "\n"[0]) #optparse does this btr
         end
       end
     end
