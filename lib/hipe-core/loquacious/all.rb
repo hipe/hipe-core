@@ -2,3 +2,4 @@
 #
 #
 require 'hipe-core/loquacious/range'
+require 'hipe-core/loquacious/enum'

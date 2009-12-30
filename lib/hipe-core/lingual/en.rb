@@ -12,7 +12,19 @@ module Hipe
       En.construct(&block)
     end
 
+    # just for modules to pull in the "en()" constructor
+    # WARNING this is experimental and the exact name and means of extending it may change
+    module English
+      def en &block
+        En.construct(&block)
+      end
+    end
+
     module En
+      def en &block
+        En.construct(&block)
+      end
+
 
       def self.sp   *args; Sp[*args] end
       def self.np   *args; Np[*args] end
@@ -20,6 +32,9 @@ module Hipe
       def self.adjp *args; Adjp[*args] end
       def self.artp *args; Artp[*args] end
       def self.outs; @outs ||= [] end
+      def self.list(items)
+        List[items]
+      end
       def self.construct &block
         phrase = self.instance_eval(&block)
         phrase.outs.concat(@outs) if (@outs)
@@ -332,7 +347,7 @@ module Hipe
           array
         end
         def self.join list, conj1, conj2, &block
-          list.map!(&block) if block
+          list = list.map(&block) if block
           case list.size
           when 0 then 'nothing'
           when 1 then list[0]
