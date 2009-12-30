@@ -1,3 +1,5 @@
+# bacon spec/infrastructure/spec_strict-setter-getter.rb
+# bacon spec/struct/spec_table.rb
 require 'hipe-core'
 require 'hipe-core/loquacious/all'
 module Hipe
@@ -50,6 +52,22 @@ module Hipe
           end
         end
         alias_method :block_setter_getter, :block_setter_getters
+
+        def kind_of_setter_getter name, arg, *args
+          debugger
+          args.unshift(arg)
+          validations = args.map do |mojule| 
+            validator = Loquacious::KindOf.new mojule
+            lambda do |value|
+              if (msg = validator.excludes?(value)) then raise TypeError.new(msg) end
+            end
+          end
+          define_method(%{#{name}=}) do |val|
+            validations.each{ |validation| validation.call(val) }
+            instance_variable_set(%{@#{name}}, val)
+          end
+          attr_reader name
+        end
 
 
         def boolean_setter_getters *args
