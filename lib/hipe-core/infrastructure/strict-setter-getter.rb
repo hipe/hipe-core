@@ -54,7 +54,6 @@ module Hipe
         alias_method :block_setter_getter, :block_setter_getters
 
         def kind_of_setter_getter name, arg, *args
-          debugger
           args.unshift(arg)
           validations = args.map do |mojule| 
             validator = Loquacious::KindOf.new mojule
