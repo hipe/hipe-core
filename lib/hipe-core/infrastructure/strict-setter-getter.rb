@@ -37,6 +37,7 @@ module Hipe
 
     def self.extended(klass)
       class << klass
+
         def block_setter_getters *args
           args.each do |name|
             define_method(%{#{name}=}) do |val|
@@ -49,32 +50,8 @@ module Hipe
           end
         end
         alias_method :block_setter_getter, :block_setter_getters
-        def symbol_setter_getters *args
-          args.each do |name|
-            symbol_setter_getter name
-          end
-        end
-        def symbol_setter_getter name, *args, &block
-          validations = []
-          validations << block if block
-          args.each do |arg|
-            case arg
-            when Hash
-              arg.each do |opt_name, opt_value|
-                raise ArgumentError.new("invalid option #{opt_name.inspect}") unless SymbolOptions[opt_name]
-                SymbolOptions[opt_name].call(opt_value,validations)
-              end
-            else
-              raise TypeError.new("expecting Hash had #{arg.type}")
-            end
-          end
-          define_method(%{#{name}=}) do |val|
-            raise TypeError.new("#{name} must be a Symbol, not #{val.inspect}") unless val.kind_of? Symbol
-            validations.each{ |validation| validation.call(val) }
-            instance_variable_set(%{@#{name}}, val)
-          end
-          attr_reader name
-        end
+
+
         def boolean_setter_getters *args
           args.each do |name|
             define_method(%{#{name}=}) do |val|
@@ -87,6 +64,8 @@ module Hipe
           end
         end
         alias_method :boolean_setter_getter, :boolean_setter_getters
+
+
         def integer_setter_getter name, *args, &block
           validations = []
           validations << block if block
@@ -115,6 +94,8 @@ module Hipe
           end
           attr_reader name
         end
+
+
         def string_setter_getter name, *args, &block
           validations = []
           validations << block if block
@@ -140,6 +121,34 @@ module Hipe
         def string_setter_getters *args
           args.each do |arg|
             string_setter_getter(arg)
+          end
+        end
+
+
+        def symbol_setter_getter name, *args, &block
+          validations = []
+          validations << block if block
+          args.each do |arg|
+            case arg
+            when Hash
+              arg.each do |opt_name, opt_value|
+                raise ArgumentError.new("invalid option #{opt_name.inspect}") unless SymbolOptions[opt_name]
+                SymbolOptions[opt_name].call(opt_value,validations)
+              end
+            else
+              raise TypeError.new("expecting Hash had #{arg.type}")
+            end
+          end
+          define_method(%{#{name}=}) do |val|
+            raise TypeError.new("#{name} must be a Symbol, not #{val.inspect}") unless val.kind_of? Symbol
+            validations.each{ |validation| validation.call(val) }
+            instance_variable_set(%{@#{name}}, val)
+          end
+          attr_reader name
+        end
+        def symbol_setter_getters *args
+          args.each do |name|
+            symbol_setter_getter name
           end
         end
       end
