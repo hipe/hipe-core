@@ -1,10 +1,20 @@
+# bacon spec/struct/spec_table.rb
 require 'hipe-core'
 require 'hipe-core/infrastructure/strict-setter-getter'
+require 'hipe-core/struct/hash-like-with-factories'
 require 'hipe-core/io/buffer-string'
+require 'hipe-core/lingual/ascii-typesetting'
+require 'hipe-core/lingual/en'
+require 'hipe-core/struct/hash-like-write-once-extension'
 require 'orderedhash'
 
 module Hipe
   class Table
+    class Renderers < HashLikeWithFactories
+      # added to below
+    end
+
+    include Hipe::Lingual::English
 
     # Hipe::Table is an abstract representation of a table intended to allow:
     #  - dynamic addition and removal of rows and columns
@@ -25,8 +35,8 @@ module Hipe
       def initialize
         @fields = []
         @fields_by_name = {}
-        @renderers = {}
-        @show_header = true
+        @show_header = nil
+        @renderers = Renderers.new
       end
 
       def self.humanize_lite(str)
@@ -37,7 +47,11 @@ module Hipe
     attr_accessor :fields
     attr_reader :list
     block_setter_getter :labelize
-    boolean_setter_getters :visible, :show_header
+    boolean_setter_getter :visible
+    kind_of_setter_getter :show_header, TrueClass, FalseClass, NilClass
+    symbol_setter_getter :axis, :enum => [:horizontal, :vertical]
+    kind_of_setter_getter :name, String, NilClass
+    kind_of_setter_getter :renderers, Renderers
 
     def self.make &block
       t = self.new
@@ -67,26 +81,30 @@ module Hipe
       @list = list
     end
 
-    def renderer(name,&block)
-      if (block)
-        renderer = (@renderers[name] ||= PreRenderingAsciiRenderer.new)
-        block.call(renderer)
-        renderer.set_defaults
+    def renderer(*args)
+      if block_given?
+        raise ArgumentError.new("wrong number of arguments (#{args.size} for 1) ") unless (args.size == 1)
+        name = args[0]
+        instance_existed = @renderers.has_instance?(name)
+        renderer = @renderers[name]
+        if (renderer.nil?)
+          available_renderers = @renderers.keys.map{|k| k.inspect}
+          raise ArgumentError.new("Sorry, no such renderer #{name.inspect}. "<<
+            en{ sp(np('available','renderer'),available_renderers) }.say() )
+        end
+        yield renderer
         nil
       else
-        unless (@renderers.has_key? name)
-          @renderers[name] = case name
-          when :ascii then PreRenderingAsciiRenderer.new
-          else raise ArgumentError.new("There is no set renderer for #{name.inspect}");
-          end
-          @renderers[name].set_defaults
-        end
-        @renderers[name]
+        raise ArgumentError.new("wrong number of arguments (#{args.size} for 0) ") unless (args.size == 0)
+        @renderers.accessor
       end
     end
 
     def render(renderer_name)
-      renderer(renderer_name).render(self)
+      if (:horizontal==@axis && ! (renderer_name.to_s =~ /_horizontal$/))
+        renderer_name = %{#{renderer_name}_horizontal}.to_sym
+      end
+      renderer[renderer_name].render(self)
     end
 
     class Field
@@ -97,23 +115,18 @@ module Hipe
       # integer_setter_getter :max_width, :min=>1
       string_setter_getter :label
       block_setter_getter :renderer
-      symbol_setter_getter :align
+      symbol_setter_getter :align, :enum => [:left, :right]
 
       def initialize(table,*args,&block)
         @table = table
         @visible = true
-        opts = {}
+        Hipe::HashLikeWriteOnceExtension[opts = {}]
+        opts.write_once!
         args.each do |arg|
           case arg
-          when Symbol:
-            raise ArgumentError.new("can only have one Symbol in args") if opts[:name]
-            opts[:name] = arg
-          when Fixnum:
-            raise ArgumentError.new("can only have one Fixnum in args") if opts[:min_width]
-            opts[:min_width] = arg
-          when Hash:
-            raise ArgumentError.new("can only have one Hash in args") if opts[:opts]
-            opts[:opts] = arg
+          when Symbol: opts[:name] = arg
+          when Fixnum: opts[:min_width] = arg
+          when Hash:   opts[:opts] = arg
           else
             raise TypeError.new("unrecognized type for field construction - #{arg.inspect}")
           end
@@ -155,27 +168,53 @@ module Hipe
     # this renders in two passes so it can set appropriate column widths for ascii\
     # probably not appropriate for html etc unless we are really lazy and performance isn't an issue
     class PreRenderingAsciiRenderer
+      Renderers.register_factory :ascii, self
       extend StrictSetterGetter
+      attr_reader :separator_at
       string_setter_getters :left, :right, :separator
       block_setter_getters :header, :top, :bottom, :after_header
+      boolean_setter_getter :show_header
+      kind_of_setter_getter :separator_at, Array
+
+      # the default strategy for rendering horzontal lines will be ones that look like "+-------+"
       @lines = lambda{|w| %{+#{'-'*([w-2,0].max)}+} }
+
       class << self
         attr_reader :lines
       end
-      def set_defaults
+
+      def initialize
         @left         ||= '|  '
         @right        ||= ' |'
         @separator    ||= ' |  '
         @top          ||= self.class.lines
         @bottom       ||= self.class.lines
         @after_header ||= self.class.lines
+        @show_header  = nil if @show_header.nil? # yes
+        @separator_at ||= []
       end
+
       def render(table)
         return "(list is not set)" unless table.list
         # pre-render to calculate min_widths from actual values
         visible_fields = table.visible_fields
-        min_widths = visible_fields.map{|field| table.show_header ? (field.min_width || field.label.length) : 0  }
+        show_header =
+          if table.show_header.nil? && show_header?.nil? : true
+          elsif show_header?.nil? : table.show_header
+          else show_header? end
+
+        min_widths = visible_fields.map{|field| show_header ? (field.min_width || field.label.length) : 0  }
         rows = []
+        if (visible_fields.size > 1)
+          separators_at = Array.new(visible_fields.size - 1, @separator)
+          separator_at.each_with_index do |sep,idx|
+            next if sep.nil?
+            separators_at[idx] = sep
+          end
+        else
+          separators_at = []
+        end
+
         table.list.each do |item|
           row = []
           visible_fields.each_with_index do |field,index|
@@ -186,22 +225,23 @@ module Hipe
           end
           rows << row
         end
+
         table_width = @left.length + @right.length + min_widths.reduce(:+) +
-          ([visible_fields.size-1,0].max * @separator.length)
+          separators_at.map{|x| x.length}.reduce(:+)
 
         # render
         out = Hipe::Io::BufferString.new
         out.puts @top.call(table_width) if @top
-        if table.show_header?
+        if show_header
           out << @left
           out << visible_fields.map do |field|
             min_width = field.min_width || min_widths[visible_fields.index(field)]
             str = sprintf(%{%#{min_width}s}, field.label)
             str
-          end.join(@separator)
+          end.zip(separators_at + ['']).flatten.join
           out.puts @right
         end
-        if (table.show_header? and @after_header)
+        if (show_header and @after_header)
           out.puts @after_header.call(table_width)
         end
         rows.each do |row|
@@ -211,12 +251,62 @@ module Hipe
             min_width = field.min_width || min_widths[idx]
             left = (field.align == :left) ? '-' : ''
             row[idx] = sprintf(%{%#{left}#{min_width}s},cel)
-          end.join(@separator)
+          end.zip(separators_at + ['']).flatten.join
           out.puts @right
         end
         out.puts @bottom.call(table_width) if @bottom
         out
       end
     end
+
+    class PreRenderingHorizontalAsciiRenderer < PreRenderingAsciiRenderer
+      Renderers.register_factory :ascii_horizontal, self
+      symbol_setter_getter :value_cels_alignment, :enum => [:left, :right]
+
+
+      def initialize
+        @show_header ||= false
+        @separator_at ||= [' = ']
+        @value_cels_alignment ||= :left
+        @left ||= ''
+        @right ||= ''
+        super
+      end
+      def render(table)
+        return "(list is not set)" unless table.list
+        visible_fields = table.visible_fields
+        list = []
+        visible_fields.each do |field|
+          row = [field.label]
+          table.list.each do |item|
+            row << field.renderer.call(item).to_s
+          end
+          list << row
+        end
+        orig_renderer = self
+        new_table = Hipe::Table.make do
+          self.name = table.name
+          self.show_header = table.show_header
+          field(:property){|x| x[0]}
+          table.list.each_with_index do |item,idx|
+            field((idx + 1).to_s.to_sym, :align => (orig_renderer.value_cels_alignment||:right)){|x| x[idx+1]}
+          end
+          renderer(:ascii) do |r|
+            [:left        ,
+            :right        ,
+            :separator    ,
+            :top          ,
+            :bottom       ,
+            :after_header ,
+            :show_header  ,
+            :separator_at ].each { |x| r.send(%{#{x}=}, orig_renderer.send(%{#{x}})) }
+          end
+        end
+        new_table.list = list
+        new_table.render(:ascii)
+      end
+    end
+
+
   end
 end
