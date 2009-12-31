@@ -1,6 +1,7 @@
 module Hipe
   module Io
     module BufferStringLike
+      # a subset of IO operations as a mixin
       def <<(whatevs)
         string << whatevs
         self

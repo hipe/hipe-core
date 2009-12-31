@@ -9,7 +9,8 @@ describe Hipe::StrictSet do
   it "should inspect (rws1)" do
     @rws = Hipe::StrictSet.new([:alpha,:beta, :gamma])
     have = @rws.inspect
-    have.should.equal "#<Hipe::StrictSet: {} @whitelist: {:alpha, :beta, :gamma}>"
+    re = Regexp.new('^#<Hipe::StrictSet: \{\} @whitelist: \{(?::(?:alpha|beta|gamma)(?:, )?){3}\}>')
+    have.should.match re
   end
 
   it "should add (rws2)" do

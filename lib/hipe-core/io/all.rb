@@ -1,4 +1,5 @@
-fn = File.dirname(__FILE__)
-require File.join(fn, 'buffer-string')
-require File.join(fn, 'buffer-string-like')
-require File.join(fn, 'golden-hammer')
+require 'hipe-core/io/buffer-string'
+require 'hipe-core/io/buffer-string-like'
+require 'hipe-core/io/flushing-buffer-string'
+require 'hipe-core/io/golden-hammer'
+require 'hipe-core/io/stack-like'

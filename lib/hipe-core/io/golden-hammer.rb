@@ -1,7 +1,7 @@
 require 'hipe-core/infrastructure/strict-setter-getter'
 require 'hipe-core/infrastructure/erroneous'
 require 'hipe-core/struct/open-struct-extended'
-require 'hipe-core/struct/restricted-set-writable-array'
+require 'hipe-core/struct/strict-set'
 require 'hipe-core/io/all'
 
 module Hipe
@@ -21,7 +21,7 @@ module Hipe
       include Hipe::Erroneous
       include Hipe::Io::BufferStringLike
       extend Hipe::StrictSetterGetter
-      attr_reader :data, :string, :messages, :flush_after_every
+      attr_reader :data, :string, :messages
 
       # @param name [String,Symbol]
       # This is a facility for subclasses or clients to use --
@@ -31,7 +31,7 @@ module Hipe
       # then a suggested_template called :foo means that there is expected to be a method called "render_foo()"
       # that takes care of the (usu. ascii) rendering.  (The actual routing will happen in render_with_template())
       # which could be overridden if need be.)
-      type_of_setter_getter :suggested_template, String, Symbol
+      kind_of_setter_getter :suggested_template, String, Symbol
 
 
       # @param mixed [String,Hash]
@@ -56,13 +56,9 @@ module Hipe
           raise TypeError.new("Needed String or Hash had #{mixed.class.inspect}")
         end
         @data = OpenStructExtended.new
-        @string = BufferString.new(start_str)
+        @string = FlushingBufferString.new(start_str)
         @messages = []
         @template = nil
-        @flush_after_every = nil
-      end
-      def flush_after_every
-        @flush_after_every ||= RestrictedSetWritableArray.new(:puts)
       end
       def merge!(other)
         raise TypeError("GoldenHammer can only merge w/ another GoldenHammer, not #{other.inspect}") unless
@@ -80,7 +76,7 @@ module Hipe
         elsif @string.length > 0 || @messages.size > 0
           all_messages * "\n"
         else
-          inspect
+          @string.to_s
         end
       end
       def render_with_suggested_template(template_name)

@@ -1,9 +1,9 @@
-# IOString didn't have exactly what we wanted -- we wanted to be able
-# to perform these same operations whether we are writing to $stdout our a string:
-# thing.puts, thing.read, thing.<<
 module Hipe
   module Io
-    class BufferString < String # there was StringIO but i couldn't figure out how to use it
+    class BufferString < String
+      # IOString didn't have exactly what we wanted -- we wanted to be able
+      # to perform these same operations whether we are writing to $stdout our a string:
+      # thing.puts, thing.read, thing.<<
       def read
         output = dup
         replace('')
