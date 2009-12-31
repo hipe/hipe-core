@@ -2,20 +2,20 @@ require 'hipe-core/lingual/en'
 require 'set'
 
 module Hipe
-  class RestrictedWritableSet < SortedSet
-    include Lingual::English    
-    def initialize(list,&block)
-      @whitelist = Set.new list, &block
-      super([])
+  class RestrictedWritableSet < Set  # was SortedSet but we would have to mess w/ rb tree
+    include Lingual::English
+    def initialize(enum,&block)
+      super(nil)
+      # strange -- the above clears the instance variable "@whitelist" and sets it to an empty set. used internally?
+      @my_whitelist = Set.new enum, &block
     end
     def merge(enum)
-      theirs = Set.new(enum)
-      if theirs.proper_subset? self
+      if enum.to_set.subset? @my_whitelist
         super
       else
-        set = self
-        s1 = en{sp(np('invalid value',set.map))}.say.capitalize
-        s2 = en{sp(np('valid value',set.map))}.say.capitalize
+        whitelist = @my_whitelist
+        s1 = en{sp(np('invalid value',enum.map{|x| x.inspect}))}.say.capitalize
+        s2 = en{sp(np('valid value', whitelist.map{|x| x.inspect}, :say_count=>false))}.say.capitalize
         raise ArgumentError.new(%{#{s1}.  #{s2}.})
       end
     end
@@ -25,6 +25,15 @@ module Hipe
     def add?(o)
       return nil if include? o
       add(o)
+    end
+    def inspect
+      spr = super
+      add = @my_whitelist.inspect
+      #<Set: {:b, :a}>
+      add.gsub!(/>$/,'')
+      add.gsub!(/^#<Set: /,'@whitelist: ')
+      spr.gsub!(/>$/, " #{add}>")
+      spr
     end
   end
 end
