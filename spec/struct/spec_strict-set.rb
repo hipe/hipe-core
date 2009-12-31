@@ -1,15 +1,15 @@
-# bacon spec/struct/spec_restricted-writable-set.rb
-require 'hipe-core/struct/restricted-writable-set'
+# bacon spec/struct/spec_strict-set.rb
+require 'hipe-core/struct/strict-set'
 require 'bacon'
 require 'hipe-core/test/bacon-extensions'
 require 'ruby-debug'
 
-describe Hipe::RestrictedWritableSet do
+describe Hipe::StrictSet do
 
   it "should inspect (rws1)" do
-    @rws = Hipe::RestrictedWritableSet.new([:alpha,:beta, :gamma])
+    @rws = Hipe::StrictSet.new([:alpha,:beta, :gamma])
     have = @rws.inspect
-    have.should.equal "#<Hipe::RestrictedWritableSet: {} @whitelist: {:alpha, :beta, :gamma}>"
+    have.should.equal "#<Hipe::StrictSet: {} @whitelist: {:alpha, :beta, :gamma}>"
   end
 
   it "should add (rws2)" do
@@ -23,7 +23,7 @@ describe Hipe::RestrictedWritableSet do
   end
 
   it "should barf on bad add (rws4)" do
-    @rws = Hipe::RestrictedWritableSet.new([:alpha,:beta, :gamma])
+    @rws = Hipe::StrictSet.new([:alpha,:beta, :gamma])
     e = lambda{@rws.add(:delta)}.should.raise ArgumentError
     @rws.include?(:delta).should.equal false
     e.message.scan(%r{(?:alpha|:beta|:gamma|:delta)}).size.should.equal 4

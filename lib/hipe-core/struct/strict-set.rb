@@ -2,7 +2,7 @@ require 'hipe-core/lingual/en'
 require 'set'
 
 module Hipe
-  class RestrictedWritableSet < Set  # was SortedSet but we would have to mess w/ rb tree
+  class StrictSet < Set  # was SortedSet but we would have to mess w/ rb tree
     include Lingual::English
     def initialize(enum,&block)
       super(nil)
