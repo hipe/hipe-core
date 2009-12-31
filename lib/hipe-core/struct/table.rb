@@ -64,6 +64,15 @@ module Hipe
       fields.select{|f| f.visible? }
     end
 
+    def show_only *list
+      (@fields_by_name.keys - list).each do |name|
+        @fields_by_name[name].hide()
+      end
+      list.each do |name|
+        @fields_by_name[name].show()
+      end
+    end
+
     def field(*args,&block)
       if block
         f = Field.new(self,*args,&block)
