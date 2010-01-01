@@ -19,3 +19,4 @@ tmp.*
 temp.*
 hipe-core.gemspec
 FOCUS
+tmp/
