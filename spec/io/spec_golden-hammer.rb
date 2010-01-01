@@ -11,10 +11,10 @@ describe Hipe::Io::GoldenHammer do
     gh.string.flush_to << io
     gh << "blah"
     gh.to_s.should.equal "blah"
-    io.rewind    
+    io.rewind
     io.read.should.equal ''
   end
-  
+
   it "should flush! (gh2)" do
     io = StringIO.new
     gh = Hipe::Io::GoldenHammer.new
@@ -22,8 +22,8 @@ describe Hipe::Io::GoldenHammer do
     gh << "blah"
     gh.string.flush!
     gh.to_s.should.equal ""
-    io.rewind    
+    io.rewind
     io.read.should.equal "blah"
   end
-  
+
 end

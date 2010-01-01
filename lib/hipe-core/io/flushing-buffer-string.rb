@@ -8,7 +8,7 @@ module Hipe
       # these defaults won't be changeable until we add a whitelist accessor on StrictSet @todo
       # @see Hipe::Io::BufferString for appologies to StringIO
       attr_reader :flush_after, :flush_to
-      
+
       def initialize str=''
         super str
         @flush_after = StrictSet.new([:puts])
@@ -35,4 +35,4 @@ module Hipe
     end
   end
 end
-      
+

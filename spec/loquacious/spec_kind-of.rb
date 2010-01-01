@@ -15,13 +15,13 @@ describe KindOf do
     validator = KindOf.new(TestMod)
     validator.excludes?(TestGoodClass.new).should.equal nil
     validator.excludes?(TestBadClass.new).should.match %r{TestMod}
-    validator.excludes?(TestBadClass.new).should.match %r{TestBadClass}    
+    validator.excludes?(TestBadClass.new).should.match %r{TestBadClass}
   end
-  
+
   it "should barf on bad construction (loq-ko-2)" do
     e = lambda{ KindOf.new(Object.new) }.should.raise(TypeError)
     e.message.should.match %r{Object}
-    e.message.should.match %r{Module}    
+    e.message.should.match %r{Module}
   end
-  
-end 
+
+end
