@@ -3,10 +3,11 @@
 require 'hipe-core'
 require 'hipe-core/loquacious/all'
 module Hipe
-  module StrictSetterGetter  # waiting for a new home
+  module StrictSetterGetter
 
     # Like attr_accessor, this creates setters and getters on your class but unlike attr_accessor
     # this enforces type (kind of), follows some syntactic conventions and maybe does some validations
+    # and allows for some reflection with setter_getters
     #
     # Available "types" are: callable, symbol, integer (with optional range assertion), and "boolean"
     #
@@ -27,6 +28,33 @@ module Hipe
     # If your class has setters and getters for booleans, a '?'-form alias for the getter will be created
     #
 
+    # just for reflection api
+    class SetterGetter
+      attr_reader :name, :args, :block
+      def initialize name, *args, &block
+        @name = name
+        @args = args
+        @block = block
+        freeze
+      end
+      def == o
+        o.is_a?(self.class) && @name == o.name && @args == o.args && @block == o.block
+      end
+      alias_method :eql?, :==
+      # for Set
+      def hash
+        %{#{@name.hash}-#{@args.hash}-#{@block.hash}}.hash
+      end
+    end
+
+    class BooleanSetterGetter    < SetterGetter; end
+    class StringSetterGetter     < SetterGetter; end
+    class SymbolSetterGetter     < SetterGetter; end
+    class IntegerSetterGetter    < SetterGetter; end
+    class KindOfSetterGetter     < SetterGetter; end
+    class KindOfEachSetterGetter < SetterGetter; end
+    class BlockSetterGetter      < SetterGetter; end
+
     SymbolOptions = {
       :enum => lambda do |klass, property, enum_list, validations|
         Hipe::Loquacious::EnumLike[enum_list]
@@ -41,8 +69,18 @@ module Hipe
     }
 
     def self.extended(klass)
+      klass.send :instance_variable_set, '@strict_setter_getters', Set.new
+
       class << klass
 
+        def strict_setter_getters;
+          @strict_setter_getters ||= begin
+            ancestors[1].strict_setter_getters.dup
+          end
+        end
+
+        # Creates a setter getter that takes a block argument as its parameter
+        # Asserts that the argument responds to :send
         def block_setter_getters *args
           args.each do |name|
             define_method(%{#{name}=}) do |val|
@@ -52,10 +90,14 @@ module Hipe
             define_method(name) do |&block|
               block.nil? ? instance_variable_get(%{@#{name}}) : send(%{#{name}=}, block)
             end
+            strict_setter_getters.add BlockSetterGetter.new(name, *args)
           end
         end
         alias_method :block_setter_getter, :block_setter_getters
 
+        # This is not expected to be used very often.  Like kind_of_setter_getter, but takes a list and
+        # asserts that the thing is a kind_of? each item on the list
+        # The only reason this is here is because this used to be the implementation for kind_of when it takes a list
         def kind_of_each_setter_getter name, arg, *args
           args.unshift(arg)
           validations = args.map do |mojule|
@@ -69,8 +111,10 @@ module Hipe
             instance_variable_set(%{@#{name}}, val)
           end
           attr_reader name
+          strict_setter_getters.add KindOfEachSetterGetter.new(name, *args)
         end
 
+        # Creates a setter getter that asserts that the value is a kind_of? at least one of the items in the list
         def kind_of_setter_getter name, arg, *args
           args.unshift(arg)
           loquacii = {}
@@ -87,6 +131,7 @@ module Hipe
             instance_variable_set(%{@#{name}}, value)
           end
           attr_reader name
+          strict_setter_getters.add KindOfSetterGetter.new(name, *args)
         end
 
         def boolean_setter_getters *args
@@ -98,6 +143,7 @@ module Hipe
             end
             attr_reader name
             alias_method %{#{name}?}, name
+            strict_setter_getters.add BooleanSetterGetter.new(name, [], nil)
           end
         end
         alias_method :boolean_setter_getter, :boolean_setter_getters
@@ -130,6 +176,7 @@ module Hipe
             instance_variable_set(%{@#{name}}, val)
           end
           attr_reader name
+          strict_setter_getters.add IntegerSetterGetter.new(name, *args, &block)
         end
 
 
@@ -154,6 +201,7 @@ module Hipe
             instance_variable_set(%{@#{name}}, val)
           end
           attr_reader name
+          strict_setter_getters.add StringSetterGetter.new(name, *args, &block)
         end
         def string_setter_getters *args
           args.each do |arg|
@@ -182,6 +230,7 @@ module Hipe
             instance_variable_set(%{@#{name}}, val)
           end
           attr_reader name
+          strict_setter_getters.add SymbolSetterGetter.new(name, *args, &block) if strict_setter_getters
         end
         def symbol_setter_getters *args
           args.each do |name|
