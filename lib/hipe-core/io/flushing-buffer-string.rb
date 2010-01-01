@@ -17,8 +17,8 @@ module Hipe
       end
 
       def puts *args
-        super
-        if @flush_after.include? puts
+        super(*args)
+        if @flush_after.include? :puts
           flush!
         end
       end

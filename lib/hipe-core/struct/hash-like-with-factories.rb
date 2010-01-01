@@ -1,5 +1,6 @@
 # bacon spec/struct/spec_hash-like-with-factories.rb
 # bacon spec/struct/spec_table.rb
+require 'ruby-debug'
 
 module Hipe
   class HashLikeWithFactories
@@ -29,8 +30,13 @@ module Hipe
       end
     end
 
+    def self.inherited(klass)
+      unless klass.instance_variable_get('@factories')
+        klass.instance_variable_set('@factories', {})
+      end
+    end
+
     def self.register_factory(name, klass)
-      @factories ||= {}
       @factories[name] = klass
     end
 

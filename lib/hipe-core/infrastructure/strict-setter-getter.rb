@@ -28,14 +28,17 @@ module Hipe
     #
 
     SymbolOptions = {
-      :enum => lambda do |enum_list, validations|
+      :enum => lambda do |klass, property, enum_list, validations|
         Hipe::Loquacious::EnumLike[enum_list]
-        validations << lambda do |value|
+        klass.instance_variable_set(%{@#{property}_enum}, enum_list)
+        meta = class << klass; self end
+        meta.send(:define_method,%{#{property}_enum}){ instance_variable_get(%{@#{property}_enum}) }
+        validations << lambda do |value, object|
+          enum_list = object.class.send(%{#{property}_enum})
           if (err_msg = enum_list.excludes?(value)) then raise ArgumentError.new(err_msg) end
         end
       end
     }
-
 
     def self.extended(klass)
       class << klass
@@ -167,7 +170,7 @@ module Hipe
             when Hash
               arg.each do |opt_name, opt_value|
                 raise ArgumentError.new("invalid option #{opt_name.inspect}") unless SymbolOptions[opt_name]
-                SymbolOptions[opt_name].call(opt_value,validations)
+                SymbolOptions[opt_name].call(self,name,opt_value,validations)
               end
             else
               raise TypeError.new("expecting Hash had #{arg.type}")
@@ -175,7 +178,7 @@ module Hipe
           end
           define_method(%{#{name}=}) do |val|
             raise TypeError.new("#{name} must be a Symbol, not #{val.inspect}") unless val.kind_of? Symbol
-            validations.each{ |validation| validation.call(val) }
+            validations.each{ |validation| validation.call(val,self) }
             instance_variable_set(%{@#{name}}, val)
           end
           attr_reader name

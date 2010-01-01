@@ -49,6 +49,7 @@ module Hipe
         case mixed
         when String: start_str = mixed
         when Hash
+          start_str = ''
           mixed.each do |key,value|
             send %{#{key}=}, value
           end
