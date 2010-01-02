@@ -217,4 +217,20 @@ module Hipe::Loquacious
     end
   end
 
+  class CanHavePlurals
+    include Hipe::Loquacious::AttrAccessor
+    string_accessors :alpha, :beta, :gamma
+  end
+
+  describe CanHavePlurals do
+    it "should work" do
+      CanHavePlurals.accessors.size.should.equal 3
+      o = CanHavePlurals.new
+      o.alpha = 'beta'
+      o.beta = 'gamma'
+      o.gamma = 'delta'
+      (o.alpha << o.beta << o.gamma).should.equal "betagammadelta"
+    end
+  end
+
 end

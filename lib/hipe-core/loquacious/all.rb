@@ -61,10 +61,17 @@ module Hipe
             @accessors || (@accessors = ancestors[1].accessors.dup) # gulp
           end
           AttrAccessors.each do |key,claz|
-            self.send(:define_method,key) do |name, *args, &block|
+            self.send(:define_method, key) do |name, *args, &block|
               accessor = claz.new(name,*args,&block)
               accessor.define_methods(self)
               accessors[accessor.name] = accessor
+            end
+            if claz.ancestors.include? HasPlural
+              self.send(:define_method, %{#{key}s}) do |*args|
+                args.each do |symbol|
+                  self.send key, symbol
+                end
+              end
             end
           end
         end
@@ -218,6 +225,9 @@ module Hipe
        end
      end
 
+     module HasPlural
+     end
+
      ######################### the attr accessors #################################
 
      AttrAccessors = {}
@@ -245,6 +255,7 @@ module Hipe
      class BooleanAttrAccessor < StrictAttrAccessor
        AttrAccessors[:boolean_accessor] = self
        include CanNil
+       include HasPlural
        def initialize name, opts={}
          super
          enum = [true, false]
@@ -273,6 +284,7 @@ module Hipe
        include CanMinMax
        include CanCoerceWith
        include CanNil
+       include HasPlural
        def initialize *args
          super
          unions = []
@@ -301,6 +313,7 @@ module Hipe
        AttrAccessors[:string_accessor] = self
        include CanCoerceWith
        include CanNil
+       include HasPlural
        attr_accessor :regexp
        def initialize *args
          super
@@ -317,6 +330,7 @@ module Hipe
        AttrAccessors[:symbol_accessor] = self
        include CanCoerceWith
        include CanNil
+       include HasPlural
        def initialize name,*args
          super
          unions = [KindOfSet.new(Symbol)]
