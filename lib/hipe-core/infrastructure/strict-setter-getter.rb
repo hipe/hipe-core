@@ -2,6 +2,7 @@
 # bacon spec/struct/spec_table.rb
 require 'hipe-core'
 require 'hipe-core/loquacious/all'
+require 'set'
 module Hipe
   module StrictSetterGetter
 

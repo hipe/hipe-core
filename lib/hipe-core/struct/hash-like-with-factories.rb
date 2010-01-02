@@ -31,21 +31,28 @@ module Hipe
     end
 
     def self.inherited(klass)
-      unless klass.instance_variable_get('@factories')
-        klass.instance_variable_set('@factories', {})
-      end
+      raise RuntimeError.new('no') if klass.instance_variable_get('@factories') or
+         klass.instance_variable_get('@orer')
+      klass.instance_variable_set('@factories',{})
+      klass.instance_variable_set('@order',    [])
     end
 
     def self.register_factory(name, klass)
       @factories[name] = klass
+      @order << name unless @order.include? name
     end
 
     def self.factories
       @factories
     end
 
+    def self.order
+      @order
+    end
+
     def initialize
       @table = {}
+      @order = self.class.order.dup
     end
 
     def accessor
@@ -53,22 +60,30 @@ module Hipe
     end
 
     def size
-      keys.size
+      @order.size
     end
 
     def keys
-      @table.keys | self.class.factories.keys
+      @order
+    end
+
+    def first
+      self[@order.first]
+    end
+
+    def last
+      self[@order.last]
     end
 
     def each
-      keys.each do |key|
+      @order.each do |key|
         yield self[key]
       end
     end
 
-    # allows querying the renderers list by name w/o constructing objects from the factories
+    # allows querying the list by name w/o constructing objects from the factories
     def has_key? key
-      keys.include? key
+      @order.include? key
     end
 
     def has_instance? key
@@ -80,14 +95,23 @@ module Hipe
         raise ArgumentError.new("This is non-clobbering.  Call delete() first for #{key.inspect}")
       end
       @table[key] = value
+      @order << key unless @order.include? key
     end
 
     def [] key
-      @table[key] || (self.class.factories[key] && (@table[key] = self.class.factories[key].new)) || nil
+      @table[key] || begin
+        if self.class.factories[key]
+          @order << key unless @order.include? key # it shouldn't
+          @table[key] = self.class.factories[key].new
+        else
+          nil
+        end
+      end
     end
 
     def delete(key)
       @table.delete(key)
+      @order.delete(key) #!
     end
   end
 end

@@ -32,5 +32,13 @@ module Hipe
       it.cast(:a_symbol).should.equal "a_symbol"
       @hash[:string].equal?(it).should.equal true
     end
+
+    it "should do first and last" do
+      @hash = TestHlwf.new
+      @hash[:blah] = 'xyz'
+      @hash[:blah_blah] = 'lmnop'
+      @hash.first.should.be.kind_of ToStringCaster
+      @hash.last.should.equal 'lmnop'
+    end
   end
 end
