@@ -1,4 +1,4 @@
-require 'hipe-core/infrastructure/strict-setter-getter'
+require 'hipe-core/infrastructure/strict-attr-accessor'
 require 'hipe-core/infrastructure/erroneous'
 require 'hipe-core/struct/open-struct-extended'
 require 'hipe-core/struct/strict-set'
@@ -20,7 +20,7 @@ module Hipe
       #
       include Hipe::Erroneous
       include Hipe::Io::BufferStringLike
-      extend Hipe::StrictSetterGetter
+      extend Hipe::StrictAttrAcccessor
       attr_reader :data, :string, :messages
 
       # @param name [String,Symbol]

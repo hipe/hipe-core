@@ -1,10 +1,10 @@
-# bacon spec/infrastructure/spec_strict-setter-getter.rb
+# bacon spec/infrastructure/spec_strict-attr-accessor.rb
 # bacon spec/struct/spec_table.rb
 require 'hipe-core'
 require 'hipe-core/loquacious/all'
 require 'set'
 module Hipe
-  module StrictSetterGetter
+  module StrictAttrAcccessor
 
     # Like attr_accessor, this creates setters and getters on your class but unlike attr_accessor
     # this enforces type (kind of), follows some syntactic conventions and maybe does some validations
@@ -16,7 +16,7 @@ module Hipe
     # For example, if your class needs to be able to make setters and getters for proc instance variables,
     #
     #   class MyClass
-    #     extend Hipe::StrictSetterGetter
+    #     extend Hipe::StrictAttrAcccessor
     #     block_setter_getters :row_filter, :field_filter
     #   end
     #

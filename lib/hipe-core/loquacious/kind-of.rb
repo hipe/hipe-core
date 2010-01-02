@@ -1,5 +1,5 @@
 # bacon spec/loquacious/spec_kind-of.rb
-# bacon spec/infrastructure/spec_strict-setter-getter.rb
+# bacon spec/infrastructure/spec_strict-attr-accessor.rb
 module Hipe
   module Loquacious
     class KindOf

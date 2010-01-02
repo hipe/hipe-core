@@ -1,9 +1,9 @@
-# bacon spec/infrastructure/spec_strict-setter-getter.rb
+# bacon spec/infrastructure/spec_strict-attr-accessor.rb
 require 'bacon'
-require 'hipe-core/infrastructure/strict-setter-getter'
+require 'hipe-core/infrastructure/strict-attr-accessor'
 require 'ruby-debug'
 
-module Hipe::StrictSetterGetter
+module Hipe::StrictAttrAcccessor
 
   module DuckLike
   end
@@ -16,21 +16,21 @@ module Hipe::StrictSetterGetter
   end
 
   class SomeClass
-    extend Hipe::StrictSetterGetter
+    extend Hipe::StrictAttrAcccessor
     symbol_setter_getter :cartoon_character, :enum => [:beavis, :butthead]
     kind_of_each_setter_getter :duck, DuckLike
     kind_of_setter_getter :blah, DuckLike, Fixnum
   end
 
   class ClassWithInterfaceSubset
-    extend Hipe::StrictSetterGetter
+    extend Hipe::StrictAttrAcccessor
     symbol_setter_getter :cartoon_character, :enum => [:beavis, :butthead]
     kind_of_each_setter_getter :duck, DuckLike
   end
 
   ShouldBeTypeError = begin
     class OtherClass
-      extend Hipe::StrictSetterGetter
+      extend Hipe::StrictAttrAcccessor
       kind_of_each_setter_getter :duck, ADuck.new
     end
   rescue TypeError => e; e; end
@@ -101,7 +101,7 @@ module Hipe::StrictSetterGetter
 
 
   class Parent
-    extend Hipe::StrictSetterGetter
+    extend Hipe::StrictAttrAcccessor
     symbol_setter_getter :name
   end
 

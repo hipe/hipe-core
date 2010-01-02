@@ -83,7 +83,7 @@ module Hipe
 
     # allows querying the list by name w/o constructing objects from the factories
     def has_key? key
-      [self.class.order + @order].include? key
+      (self.class.order + @order).include? key
     end
 
     def has_instance? key

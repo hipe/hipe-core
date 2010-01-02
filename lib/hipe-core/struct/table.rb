@@ -1,6 +1,6 @@
 # bacon spec/struct/spec_table.rb
 require 'hipe-core'
-require 'hipe-core/infrastructure/strict-setter-getter'
+require 'hipe-core/infrastructure/strict-attr-accessor'
 require 'hipe-core/struct/hash-like-with-factories'
 require 'hipe-core/io/buffer-string'
 require 'hipe-core/lingual/ascii-typesetting'
@@ -29,7 +29,7 @@ module Hipe
     #
     #  Despite MVC wisdom, Hipe::Table will provide a default renderer for :ascii contexts
 
-    extend StrictSetterGetter
+    extend StrictAttrAcccessor
 
     protected
       def initialize
@@ -117,7 +117,7 @@ module Hipe
     end
 
     class Field
-      extend StrictSetterGetter
+      extend StrictAttrAcccessor
       symbol_setter_getter :name
       boolean_setter_getter :visible
       integer_setter_getter :min_width, :min=>1
@@ -178,7 +178,7 @@ module Hipe
     # probably not appropriate for html etc unless we are really lazy and performance isn't an issue
     class PreRenderingAsciiRenderer
       Renderers.register_factory :ascii, self
-      extend StrictSetterGetter
+      extend StrictAttrAcccessor
       attr_reader :separator_at
       string_setter_getters :left, :right, :separator
       block_setter_getters :header, :top, :bottom, :after_header
