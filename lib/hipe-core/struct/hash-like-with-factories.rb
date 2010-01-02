@@ -52,7 +52,7 @@ module Hipe
 
     def initialize
       @table = {}
-      @order = self.class.order.dup
+      @order = []
     end
 
     def accessor
@@ -60,30 +60,30 @@ module Hipe
     end
 
     def size
-      @order.size
+      self.class.order.size + @order.size
     end
 
     def keys
-      @order
+      self.class.order + @order
     end
 
     def first
-      self[@order.first]
+      self[self.class.order.first || @order.first]
     end
 
     def last
-      self[@order.last]
+      self[@order.last || self.class.order.last]
     end
 
     def each
-      @order.each do |key|
+      [self.class.order + @order].each do |key|
         yield self[key]
       end
     end
 
     # allows querying the list by name w/o constructing objects from the factories
     def has_key? key
-      @order.include? key
+      [self.class.order + @order].include? key
     end
 
     def has_instance? key
@@ -95,13 +95,13 @@ module Hipe
         raise ArgumentError.new("This is non-clobbering.  Call delete() first for #{key.inspect}")
       end
       @table[key] = value
-      @order << key unless @order.include? key
+      @order << key unless self.class.order.include?(key) or @order.include?(key)
     end
 
     def [] key
       @table[key] || begin
         if self.class.factories[key]
-          @order << key unless @order.include? key # it shouldn't
+          @order << key unless self.class.order.include?(key) or @order.include?(key) # it shouldn't
           @table[key] = self.class.factories[key].new
         else
           nil
@@ -110,6 +110,8 @@ module Hipe
     end
 
     def delete(key)
+      raise RuntimeException("Can't delete #{key.inspect} -- it was defined in class") if
+        self.class.order.include?(key)
       @table.delete(key)
       @order.delete(key) #!
     end
