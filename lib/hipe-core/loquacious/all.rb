@@ -305,7 +305,7 @@ module Hipe
        def initialize *args
          super
          unions = []
-         unions << PrimitiveEnumSet(nil) if @nil
+         unions << PrimitiveEnumSet.new(nil) if @nil
          intersects = [KindOfSet.new(String)]
          intersects << RegexpSet.new(@regexp) if @regexp
          unions << ( intersects.size > 1 ? IntersectedSet.new(*intersects) : intersects[0] )

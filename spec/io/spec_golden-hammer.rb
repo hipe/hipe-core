@@ -2,6 +2,7 @@
 require 'ruby-debug'
 require 'hipe-core/io/golden-hammer'
 require 'hipe-core/test/bacon-extensions'
+require 'bacon'
 
 
 describe Hipe::Io::GoldenHammer do

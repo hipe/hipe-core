@@ -1,4 +1,4 @@
-require 'hipe-core/infrastructure/strict-attr-accessor'
+require 'hipe-core/loquacious/all'
 require 'hipe-core/infrastructure/erroneous'
 require 'hipe-core/struct/open-struct-extended'
 require 'hipe-core/struct/strict-set'
@@ -20,7 +20,7 @@ module Hipe
       #
       include Hipe::Erroneous
       include Hipe::Io::BufferStringLike
-      extend Hipe::StrictAttrAcccessor
+      extend Hipe::Loquacious::AttrAccessor
       attr_reader :data, :string, :messages
 
       # @param name [String,Symbol]
@@ -31,7 +31,7 @@ module Hipe
       # then a suggested_template called :foo means that there is expected to be a method called "render_foo()"
       # that takes care of the (usu. ascii) rendering.  (The actual routing will happen in render_with_template())
       # which could be overridden if need be.)
-      kind_of_setter_getter :suggested_template, String, Symbol
+      attr_accessor :suggested_template
 
 
       # @param mixed [String,Hash]

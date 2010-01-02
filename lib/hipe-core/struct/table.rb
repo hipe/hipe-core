@@ -1,20 +1,15 @@
 # bacon spec/struct/spec_table.rb
 require 'hipe-core'
-require 'hipe-core/infrastructure/strict-attr-accessor'
-require 'hipe-core/struct/hash-like-with-factories'
+require 'hipe-core/loquacious/all'
 require 'hipe-core/io/buffer-string'
 require 'hipe-core/lingual/ascii-typesetting'
-require 'hipe-core/lingual/en'
+require 'hipe-core/struct/hash-like-with-factories'
 require 'hipe-core/struct/hash-like-write-once-extension'
+require 'hipe-core/lingual/en'
 require 'orderedhash'
 
 module Hipe
   class Table
-    class Renderers < HashLikeWithFactories
-      # added to below
-    end
-
-    include Hipe::Lingual::English
 
     # Hipe::Table is an abstract representation of a table intended to allow:
     #  - dynamic addition and removal of rows and columns
@@ -29,7 +24,13 @@ module Hipe
     #
     #  Despite MVC wisdom, Hipe::Table will provide a default renderer for :ascii contexts
 
-    extend StrictAttrAcccessor
+
+    include Loquacious::AttrAccessor
+    include Lingual::English
+
+    class Renderers < HashLikeWithFactories
+      # added to below
+    end
 
     protected
       def initialize
@@ -46,12 +47,12 @@ module Hipe
     public
     attr_accessor :fields
     attr_reader :list
-    block_setter_getter :labelize
-    boolean_setter_getter :visible
-    kind_of_setter_getter :show_header, TrueClass, FalseClass, NilClass
-    symbol_setter_getter :axis, :enum => [:horizontal, :vertical]
-    kind_of_setter_getter :name, String, NilClass
-    kind_of_setter_getter :renderers, Renderers
+    block_accessor :labelize
+    boolean_accessor :visible
+    boolean_accessor :show_header, :nil => true
+    enum_accessor :axis, [:horizontal, :vertical]
+    string_accessor :name, :nil => true
+    kind_of_accessor :renderers, Renderers
 
     def self.make &block
       t = self.new
@@ -117,14 +118,14 @@ module Hipe
     end
 
     class Field
-      extend StrictAttrAcccessor
-      symbol_setter_getter :name
-      boolean_setter_getter :visible
-      integer_setter_getter :min_width, :min=>1
-      # integer_setter_getter :max_width, :min=>1
-      string_setter_getter :label
-      block_setter_getter :renderer
-      symbol_setter_getter :align, :enum => [:left, :right]
+      include Loquacious::AttrAccessor
+      symbol_accessor :name
+      boolean_accessor :visible
+      integer_accessor :min_width, :min=>1
+      # integer_accessor :max_width, :min=>1
+      string_accessor :label
+      block_accessor :renderer
+      enum_accessor :align, [:left, :right]
 
       def initialize(table,*args,&block)
         @table = table
@@ -178,12 +179,17 @@ module Hipe
     # probably not appropriate for html etc unless we are really lazy and performance isn't an issue
     class PreRenderingAsciiRenderer
       Renderers.register_factory :ascii, self
-      extend StrictAttrAcccessor
+      include Loquacious::AttrAccessor
       attr_reader :separator_at
-      string_setter_getters :left, :right, :separator
-      block_setter_getters :header, :top, :bottom, :after_header
-      boolean_setter_getter :show_header
-      kind_of_setter_getter :separator_at, Array
+      string_accessor :left
+      string_accessor :right
+      string_accessor :separator
+      block_accessor :header
+      block_accessor :top
+      block_accessor :bottom
+      block_accessor :after_header
+      boolean_accessor :show_header
+      kind_of_accessor :separator_at, Array
 
       # the default strategy for rendering horzontal lines will be ones that look like "+-------+"
       @lines = lambda{|w| %{+#{'-'*([w-2,0].max)}+} }
@@ -270,8 +276,7 @@ module Hipe
 
     class PreRenderingHorizontalAsciiRenderer < PreRenderingAsciiRenderer
       Renderers.register_factory :ascii_horizontal, self
-      symbol_setter_getter :value_cels_alignment, :enum => [:left, :right]
-
+      enum_accessor :value_cels_alignment, [:left, :right]
 
       def initialize
         @show_header ||= false
