@@ -56,29 +56,39 @@ module Hipe
       def self.included(klass)
         klass.send(:instance_variable_set,'@accessors', {})
         klass.send(:attr_accessor,:on_interaction_issues)
-        class << klass
-          define_method(:accessors) do
-            @accessors || (@accessors = ancestors[1].accessors.dup) # gulp
+        # class << self in a3dc63fd15e72f28eb688d438a10ef6f6272f929
+        eigen = class << klass; self end
+        eigen.send(:define_method, :accessors) do
+          # @accessors ||= (klass.instance_variable_get('@accessors') || ancestors[1].accessors.dup) # really?
+          # NO: we have to reach up to the variable called klass only for this to work to define class method attr accessors
+          @accessors ||= ancestors[1].accessors.dup # gulp
+        end
+        AttrAccessors.each do |key,claz|
+          eigen.send(:define_method, key) do |name, *args, &block|
+            accessor = claz.new(name,*args,&block)
+            accessor.define_methods(self)
+            accessors[accessor.name] = accessor
           end
-          AttrAccessors.each do |key,claz|
-            self.send(:define_method, key) do |name, *args, &block|
-              accessor = claz.new(name,*args,&block)
-              accessor.define_methods(self)
-              accessors[accessor.name] = accessor
-            end
-            if claz.ancestors.include? HasPlural
-              self.send(:define_method, %{#{key}s}) do |*args|
-                args.each do |symbol|
-                  self.send key, symbol
-                end
+          if claz.ancestors.include? HasPlural
+            eigen.send(:define_method, %{#{key}s}) do |*args|
+              args.each do |symbol|
+                self.send key, symbol
               end
             end
           end
         end
       end
 
+      # if the object is a regular object, reach up to the parent class to get the accessors hash
+      # (it's supposed to be immutable although it may not be at the time of this writing)
+      # if the the class doesn't have it we are probably a class ourselves and for whatever reason
+      # we need to get the accessors from our eigen
       def accessors
-        self.class.accessors
+        # one day i will understand why this was necessary to get class variables to work
+        @accessors ||= begin
+          self.class.instance_variable_get('@accessors') || (class << self; self end).accessors
+        end
+        # self.class.accessors
       end
 
       def handle_interaction_issues issues
@@ -154,7 +164,7 @@ module Hipe
         klass.send(:define_method, name) { instance_variable_get(%{@#{name}}) }
         klass.send(:define_method, :"#{name}=") do |mixed|
           mixed = mixed.send(coercion) if coercion && mixed.respond_to?(coercion)  # implement coercion
-          if accessors[name].include? mixed
+          if self.accessors[name].include? mixed
             instance_variable_set %{@#{name}}, mixed
           else
             issues = accessors[name].issues_with(mixed)

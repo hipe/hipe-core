@@ -233,4 +233,24 @@ module Hipe::Loquacious
     end
   end
 
+  # should work for class methods
+  PlsNo = begin
+    class PennStation
+      class << self
+        include Hipe::Loquacious::AttrAccessor
+        symbol_accessor :pls_work
+      end
+    end
+    :yay
+  rescue NoMethodError => e
+    e
+  end
+  describe PennStation,'can a class itself become an attr accessor?' do
+    it "should (loq-cls-1)" do
+      PlsNo.should.equal :yay
+      PennStation.pls_work = :beefus
+      PennStation.pls_work.should.equal :beefus
+    end
+  end
+
 end
