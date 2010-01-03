@@ -54,14 +54,12 @@ module Hipe
       #
 
       def self.included(klass)
-        klass.send(:instance_variable_set,'@accessors', {})
-        klass.send(:attr_accessor,:on_interaction_issues)
-        # class << self in a3dc63fd15e72f28eb688d438a10ef6f6272f929
         eigen = class << klass; self end
+        klass.send(:attr_accessor, :on_interaction_issues)
         eigen.send(:define_method, :accessors) do
           # @accessors ||= (klass.instance_variable_get('@accessors') || ancestors[1].accessors.dup) # really?
           # NO: we have to reach up to the variable called klass only for this to work to define class method attr accessors
-          @accessors ||= ancestors[1].accessors.dup # gulp
+          @accessors ||= (ancestors[1].respond_to?(:accessors) ? ancestors[1].accessors.dup : {}) # gulp
         end
         AttrAccessors.each do |key,claz|
           eigen.send(:define_method, key) do |name, *args, &block|
@@ -78,6 +76,7 @@ module Hipe
           end
         end
       end
+      # class << self in a3dc63fd15e72f28eb688d438a10ef6f6272f929
 
       # if the object is a regular object, reach up to the parent class to get the accessors hash
       # (it's supposed to be immutable although it may not be at the time of this writing)
@@ -527,7 +526,7 @@ module Hipe
 
       def issues_with mixed
         return [] if include? mixed
-        [Issue.new( :message_template_en => @message_template_en, :type => RegexpValidationException)]
+        [Issue.new( :message_template_en => @message_template_en, :type => KindOfValidationException)]
       end
     end
   end

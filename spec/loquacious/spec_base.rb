@@ -253,4 +253,20 @@ module Hipe::Loquacious
     end
   end
 
+
+  class TimesSquare
+    class << self
+      include Hipe::Loquacious::AttrAccessor
+      symbol_accessor :ridiculous
+      def do_something_with_it
+        self.ridiculous = :blah
+      end
+    end
+
+    klass = self
+    describe "whoa i'm inside of a class" do
+      klass.do_something_with_it
+      klass.ridiculous.should.equal :blah
+    end
+  end
 end
