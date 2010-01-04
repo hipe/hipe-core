@@ -1,4 +1,4 @@
-# bacon spec/loquacious/spec_meta.rb
+# bacon tmp.rb
 require 'ruby-debug'
 require 'bacon'
 
@@ -56,4 +56,44 @@ module Test2
 
 end
 
-#
+# bacon tmp.rb
+require 'ruby-debug'
+
+module Test3
+  module InstanceMethods
+    def inst_meth_1
+      "i'm the one"
+    end
+  end
+
+  module ClassMethodsPlusInstanceMethods
+    def extend_object klass
+      super
+      klass.instance_eval do
+        include InstanceMethods
+      end
+    end
+  end
+
+  module DefaultMethodSet
+    extend ClassMethodsPlusInstanceMethods
+    def alpha
+      "hi i'm alpha"
+    end
+  end
+
+  module ExtendedMethodSet
+    extend ClassMethodsPlusInstanceMethods
+    include DefaultMethodSet
+  end
+
+  class Tiger
+    extend ExtendedMethodSet
+  end
+
+  describe self do
+    it "should do the hack with instance methods" do
+      Tiger.instance_methods.grep(/^inst_meth_1$/).size.should.equal 1
+    end
+  end
+end
