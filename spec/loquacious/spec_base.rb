@@ -18,7 +18,7 @@ module Hipe::Loquacious
   class NotADuck; end
 
   class SomeClass
-    include Hipe::Loquacious::AttrAccessor
+    extend Hipe::Loquacious::AttrAccessor
     block_accessor    :filter
     boolean_accessor  :hidden
     boolean_accessor  :hidden2, :nil => true
@@ -168,7 +168,6 @@ module Hipe::Loquacious
       @x.email.should.equal nil
     end
 
-
     it "symbol ok (loq-sym-1)" do
       @x.method = :jo
       @x.method.should.equal :jo
@@ -182,49 +181,33 @@ module Hipe::Loquacious
   end
 
   class Subset
-    include Hipe::Loquacious::AttrAccessor
+    extend Hipe::Loquacious::AttrAccessor
     integer_accessor :height, :min => 0, :max => 10
     symbol_accessor :name
   end
 
   class Superset
-    include Hipe::Loquacious::AttrAccessor
+    extend Hipe::Loquacious::AttrAccessor
     integer_accessor :height, :min => 0, :max => 10
     symbol_accessor :name
     enum_accessor :things, [:grapes, :oranges, :pears]
   end
 
-  describe Subset, "Superset with regards to inheiritance" do
-    it "interfaces can be subsets and supersets of each other (loq-subset-1)" do
-      Subset.accessors.to_set.subset?( Superset.accessors.to_set ).should.equal true
-      Superset.accessors.to_set.subset?( Subset.accessors.to_set ).should.equal false
-    end
-  end
-
-  class Parent
-    include Hipe::Loquacious::AttrAccessor
-    symbol_accessor :name
-  end
-
-  class Child < Parent
-    symbol_accessor :favorite_color
-  end
-
-  describe Parent, "and Child inheritance!" do
-    it "with inheiritance the child class should have its own copy of the set (loq-inheir-1)" do
-      Parent.accessors.to_set.subset?(Child.accessors.to_set).should.equal true
-      Child.accessors.to_set.subset?(Parent.accessors.to_set).should.equal false
+  describe "a defined interface that is a subset of another interface" do
+    it "should be able to reflect as much (loq-subset-1)" do
+      Subset.defined_accessors.to_set.subset?( Superset.defined_accessors.to_set ).should.equal true
+      Superset.defined_accessors.to_set.subset?( Subset.defined_accessors.to_set ).should.equal false
     end
   end
 
   class CanHavePlurals
-    include Hipe::Loquacious::AttrAccessor
+    extend Hipe::Loquacious::AttrAccessor
     string_accessors :alpha, :beta, :gamma
   end
 
-  describe CanHavePlurals do
-    it "should work" do
-      CanHavePlurals.accessors.size.should.equal 3
+  describe "a class that uses the plural form of defining accessors" do
+    it "should work (loq-plur-1)" do
+      CanHavePlurals.defined_accessors.size.should.equal 3
       o = CanHavePlurals.new
       o.alpha = 'beta'
       o.beta = 'gamma'
@@ -233,11 +216,28 @@ module Hipe::Loquacious
     end
   end
 
+  class Parent
+    extend Hipe::Loquacious::AttrAccessor
+    symbol_accessor :name
+  end
+
+  class Child < Parent
+    symbol_accessor :favorite_color
+  end
+
+  describe "a child class with a parent class that has accessors" do
+    it "should have its own copy of the set (loq-inheir-1)" do
+      Parent.defined_accessors.to_set.subset?(Child.defined_accessors.to_set).should.equal true
+      Child.defined_accessors.to_set.subset?(Parent.defined_accessors.to_set).should.equal false
+      (Child.defined_accessors.eql?(Parent.defined_accessors)).should.equal false
+    end
+  end
+
   # should work for class methods
   PlsNo = begin
     class PennStation
       class << self
-        include Hipe::Loquacious::AttrAccessor
+        extend Hipe::Loquacious::AttrAccessor
         symbol_accessor :pls_work
       end
     end
@@ -245,28 +245,30 @@ module Hipe::Loquacious
   rescue NoMethodError => e
     e
   end
-  describe PennStation,'can a class itself become an attr accessor?' do
-    it "should (loq-cls-1)" do
+  describe 'with a class that has eigen-level accessors' do
+    it "you should be able to define accessors on a class's eigen (loqloq-cls-1)" do
       PlsNo.should.equal :yay
       PennStation.pls_work = :beefus
       PennStation.pls_work.should.equal :beefus
     end
   end
 
-
   class TimesSquare
+    extend Hipe::Loquacious::AttrAccessor
+    symbol_accessor :ridiculous
     class << self
-      include Hipe::Loquacious::AttrAccessor
+      extend Hipe::Loquacious::AttrAccessor
       symbol_accessor :ridiculous
-      def do_something_with_it
-        self.ridiculous = :blah
-      end
     end
+  end
 
-    klass = self
-    describe "whoa i'm inside of a class" do
-      klass.do_something_with_it
-      klass.ridiculous.should.equal :blah
+  describe "A class with both eigen-level and class-level-accessors" do
+    it "should work and maintain its own copy of both (loqloq-BOTH-1)" do
+      t = TimesSquare.new
+      t.ridiculous = :one
+      t.class.ridiculous = :two
+      t.ridiculous.should.equal :one
+      t.class.ridiculous.should.equal :two
     end
   end
 end

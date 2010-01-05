@@ -7,108 +7,19 @@ require 'hipe-core/struct/open-struct-extended'
 require 'set'
 require 'ostruct'
 
-# the idea here started out as just an abstract as possible validation library,
-# not tied too much to any framework.  It turned into a small reflection library, too
-# and got merged with StrictSetterGetter, and looks longingly over at Hipe::Interactive
-
-# right now the validation is built off of set theory (a very rudimentary subset of it)
-
 module Hipe
 
   module Loquacious
 
+    # the idea here started out as just an abstract as possible validation library,
+    # not tied too much to any framework.  It turned into a small reflection library, too
+    # and got merged with StrictSetterGetter, and looks longingly over at Hipe::Interactive
+
+    # right now the validation is built off of set theory (a very rudimentary subset of it)
+    #
+    # Currently the only public interface to anything in this file is @see Hipe::Loquacious::AttrAccessor
+
     class LoquaciousException < RuntimeError; end # for errors in using the library, not validation errors
-
-    module AttrAccessor
-      #
-      # We are familiar with attr_accessor, a class method that generates instance methods
-      # (i.e. "getters" and "setters").
-      #
-      # If your class includes this module, your class will get class methods that generate instance methods
-      # that do some rudimentary validation, maybe duck-type assertion, maybe class coercision.
-      #
-      # If your class has setters and getters for booleans, a '?'-form alias for the getter will be created.
-      #
-      # Examples of available "types" are: callable, symbol, integer (with optional range assertion), and "boolean"
-      #
-      # Additionally, this will give your class a degree of reflection with the accessors() method,
-      # which is a getter that reveals information about the setters of your class
-      #
-      #
-      # for some "types" a :use flag can be used to recognize one coercion method on parameters,
-      # eg. string_attr_accessor :name, :use => :to_str (this is not yet implemented fully)
-      #
-      # For example, if your class needs to be able to make setters and getters for proc instance variables,
-      #
-      #   class MyClass
-      #     include Hipe::Loquacious::AttrAccessor
-      #     block_attr_accessor :row_filter, :field_filter
-      #   end
-      #
-      #   obj = MyClass.new
-      #   obj.row_filter{|x| ... }              # now @row_filter is set to that Proc
-      #   obj.row_filter = 'not a proc'         # this will throw an ArgumentError
-      #   obj.field_filter = obj.row_filter     # this shows getting procs, and a different way to set them
-      #
-      #
-      #
-
-      def self.included(klass)
-        eigen = class << klass; self end
-        klass.send(:attr_accessor, :on_interaction_issues)
-        eigen.send(:define_method, :accessors) do
-          # @accessors ||= (klass.instance_variable_get('@accessors') || ancestors[1].accessors.dup) # really?
-          # NO: we have to reach up to the variable called klass only for this to work to define class method attr accessors
-          @accessors ||= (ancestors[1].respond_to?(:accessors) ? ancestors[1].accessors.dup : {}) # gulp
-        end
-        AttrAccessors.each do |key,claz|
-          eigen.send(:define_method, key) do |name, *args, &block|
-            accessor = claz.new(name,*args,&block)
-            accessor.define_methods(self)
-            accessors[accessor.name] = accessor
-          end
-          if claz.ancestors.include? HasPlural
-            eigen.send(:define_method, %{#{key}s}) do |*args|
-              args.each do |symbol|
-                self.send key, symbol
-              end
-            end
-          end
-        end
-      end
-      # class << self in a3dc63fd15e72f28eb688d438a10ef6f6272f929
-
-      # if the object is a regular object, reach up to the parent class to get the accessors hash
-      # (it's supposed to be immutable although it may not be at the time of this writing)
-      # if the the class doesn't have it we are probably a class ourselves and for whatever reason
-      # we need to get the accessors from our eigen
-      def accessors
-        # one day i will understand why this was necessary to get class variables to work
-        @accessors ||= begin
-          self.class.instance_variable_get('@accessors') || (class << self; self end).accessors
-        end
-        # self.class.accessors
-      end
-
-      def handle_interaction_issues issues
-        @interaction_issues ||= []
-        @interaction_valid = false
-        @interaction_issues.concat issues
-        if on_interaction_issues.respond_to?(:call)
-          return on_interaction_issues.call(issues)
-        elsif :invalidate == on_interaction_issues
-          # handled above
-        elsif :throw == on_interaction_issues
-          throw_this = @on_interaction_issues_throw || :issues
-          throw throw_this, issues
-        else
-          raise issues.last.type.new issues.last.message
-        end
-      end
-    end
-
-
-    ######################### the attr accessors and support ###########################
 
     class OpenSetterException < ArgumentError; end
 
@@ -136,6 +47,102 @@ module Hipe
       end
     end
 
+
+    ######################### the attr accessors and support ###########################
+
+
+    module AttrAccessorImplementation
+
+      module InstanceMethods
+        def handle_interaction_issues issues
+          @interaction_issues ||= []
+          @interaction_valid = false
+          @interaction_issues.concat issues
+          if on_interaction_issues.respond_to?(:call)
+            return on_interaction_issues.call(issues)
+          elsif :invalidate == on_interaction_issues
+            # handled above
+          elsif :throw == on_interaction_issues
+            throw_this = @on_interaction_issues_throw || :issues
+            throw throw_this, issues
+          else
+            raise issues.last.type.new issues.last.message
+          end
+        end
+      end
+
+      module ClassMethods
+        def defined_accessors
+          @defined_accessors ||= begin
+            ancestors[1].respond_to?(:defined_accessors) ? ancestors[1].defined_accessors.dup : {} # allows inheiritance of accessors
+          end
+        end
+      end
+
+      module ClassMethodsPlusInstanceMethods
+        def extend_object klass
+          super
+          klass.instance_eval do
+            attr_accessor :on_interaction_issues
+            include InstanceMethods
+          end
+        end
+      end
+    end
+
+    # populated below
+    module AttrAccessorDefaultMethodSet
+      #
+      # We are familiar with attr_accessor, a class method that generates instance methods
+      # (i.e. "getters" and "setters").
+      #
+      # If your class includes this module, your class will get class methods that generate instance methods
+      # that do some rudimentary validation, maybe duck-type assertion, maybe coercision.
+      #
+      # e.g.
+      #   class Person
+      #     extend Hipe::Loquacious::AttrAccessor
+      #     string_accessor :first_name, :nil => true, :use => :to_str
+      #     string_accessor :last_name, :use => :to_str
+      #     boolean_accessor :is_admin
+      #     integer_accessor :age, :min => 0, :max => 120
+      #   end
+      #
+      # In the above example, the first name can be nil, the last name cannot.  Anything that has a to_str() method
+      # can be used to set a first_name or a last_name.  When setting is_admin you can only use true or false.
+      # When setting age you must use a Fixnum that is within the given range.
+      #
+      # If your class has setters and getters for booleans, a '?'-form alias for the getter will be created.
+      # (In the above example, a person.is_admin? form would have been created.)
+      #
+      # Examples of available "types" are: callable, symbol, integer (with optional range assertion), and "boolean"
+      #
+      # Additionally, this will give your class a degree of reflection with the accessors() method,
+      # which is a getter that reveals information about the setters of your class
+      #
+      #
+      # for some "types" a :use flag can be used to recognize one coercion method on parameters,
+      # eg. string_attr_accessor :name, :use => :to_str (this is not yet implemented fully)
+      #
+      # For example, if your class needs to be able to make setters and getters for proc instance variables,
+      #
+      #   class MyClass
+      #     include Hipe::Loquacious::AttrAccessor
+      #     block_attr_accessor :row_filter, :field_filter
+      #   end
+      #
+      #   obj = MyClass.new
+      #   obj.row_filter{|x| ... }              # now @row_filter is set to that Proc
+      #   obj.row_filter = 'not a proc'         # this will throw an ArgumentError
+      #   obj.field_filter = obj.row_filter     # this shows getting procs, and a different way to set them
+      #
+
+      include AttrAccessorImplementation::ClassMethods
+      extend AttrAccessorImplementation::ClassMethodsPlusInstanceMethods
+    end
+
+    AttrAccessor = AttrAccessorDefaultMethodSet
+
     class StrictAttrAccessor
       # for now they are immutable and stateless
       include OpenSetter
@@ -157,22 +164,20 @@ module Hipe
         @name.hash
         #{}%{#{@name.hash}-#{@opts.hash}-#{@block.hash}}.hash
       end
-      def define_methods(klass)
-        name = self.name
-        coercion = @use
-        klass.send(:define_method, name) { instance_variable_get(%{@#{name}}) }
-        klass.send(:define_method, :"#{name}=") do |mixed|
-          mixed = mixed.send(coercion) if coercion && mixed.respond_to?(coercion)  # implement coercion
-          if self.accessors[name].include? mixed
-            instance_variable_set %{@#{name}}, mixed
-          else
-            issues = accessors[name].issues_with(mixed)
-            issues.each do |issue|
-              issue.property_name = name
-              issue.provided_value = mixed
+      def self.add_attr_accessor_constructor mojule, constructor_name, plural_form = nil
+        attr_accessor_class = self
+        mojule.module_eval do
+          define_method(constructor_name) do |*args, &block|
+            accessor = attr_accessor_class.new(*args, &block)
+            accessor.define_accessor_methods_on self
+            defined_accessors[accessor.name] = accessor
+          end
+          if plural_form
+            define_method(plural_form) do |*args|
+              args.each do |arg|
+                send constructor_name, arg
+              end
             end
-            handle_interaction_issues issues
-            return issues # experimental!
           end
         end
       end
@@ -181,6 +186,33 @@ module Hipe
       end
       def issues_with mixed
         @set.issues_with mixed
+      end
+      def define_writer_method_on(klass)
+        writer = self
+        name = self.name
+        klass.module_eval do
+          define_method(%{#{name}=}) do |mixed|
+            mixed = writer.preprocess_value(mixed) if writer.respond_to?(:preprocess_value)
+            if writer.include? mixed
+              instance_variable_set %{@#{name}}, mixed
+            else
+              issues = writer.issues_with(mixed)
+              issues.each do |issue|
+                issue.property_name = name
+                issue.provided_value = mixed
+              end
+              handle_interaction_issues issues
+              return issues # experimental!
+            end
+          end
+        end
+      end
+      def define_accessor_methods_on(klass)
+        name = self.name
+        klass.module_eval do
+          define_method(name){ instance_variable_get(%{@#{name}}) }
+        end
+        define_writer_method_on klass
       end
     end
 
@@ -198,157 +230,146 @@ module Hipe
     end
 
 
-
     ################## can-foo modules #####################################
 
-     module CanCoerceWith
-       def self.included klass
-         klass.send :attr_accessor, :use
-       end
-       def can_coerce mixed
-         return false unless @use
-         mixed.respond_to? @use
-       end
-       def coerce mixed
-         mixed.send @use
-       end
-     end
+    module CanCoerceWith
+      def self.included klass
+        klass.send :attr_accessor, :use
+      end
+      def preprocess_value mixed
+        (@use && mixed.respond_to?(@use)) ? mixed.send(@use) : mixed
+      end
+    end
 
-     module CanMinMax
-       def self.included klass
-         klass.send :attr_reader, :min, :max
-       end
-       def min= min
-         @range ||= PartialRangeSet.new(nil,nil)
-         @range.begin = min
-       end
-       def max= max
-         @range ||= PartialRangeSet.new(nil,nil)
-         @range.end = max
-       end
-     end
+    module CanMinMax
+      def self.included klass
+        klass.send :attr_reader, :min, :max
+      end
+      def min= min
+        @range ||= PartialRangeSet.new(nil,nil)
+        @range.begin = min
+      end
+      def max= max
+        @range ||= PartialRangeSet.new(nil,nil)
+        @range.end = max
+      end
+    end
 
-     module CanNil
-       def self.included klass
-         klass.send :attr_accessor, :nil
-       end
-     end
+    module CanNil
+      def self.included klass
+        klass.send :attr_accessor, :nil
+      end
+    end
 
-     module HasPlural
-     end
+    ######################### the attr accessors #################################
 
-     ######################### the attr accessors #################################
+    DefaultAttrAccessors = {}
+    class BlockAttrAccessor < StrictAttrAccessor
+      add_attr_accessor_constructor AttrAccessorDefaultMethodSet, :block_accessor, :block_accessors
+      def initialize *args
+        super
+      end
+      def define_accessor_methods_on klass
+        name = self.name
+        klass.class_eval do
+          define_method(%{#{name}=}) do |block|
+            instance_variable_set %{@#{name}}, block
+          end
+          define_method(name) do |&block|
+            if block.nil?
+              instance_variable_get %{@#{name}}
+            else
+              instance_variable_set %{@#{name}}, block
+            end
+          end
+        end
+      end
+    end
 
-     AttrAccessors = {}
+    class BooleanAttrAccessor < StrictAttrAccessor
+      add_attr_accessor_constructor AttrAccessorDefaultMethodSet, :boolean_accessor, :boolean_accessors
+      include CanNil
+      def initialize name, opts={}
+        super
+        enum = [true, false]
+        enum << nil if @nil
+        @set = PrimitiveEnumSet.new(*enum )
+      end
+      def define_accessor_methods_on klass
+        super
+        klass.send(:alias_method, %{#{name}?}, name)
+      end
+    end
 
-     class BlockAttrAccessor < StrictAttrAccessor
-       AttrAccessors[:block_accessor] = self
-       def initialize *args
-         super
-       end
-       def define_methods klass
-         name = self.name
-         klass.send(:define_method, %{#{name}=}) do |block|
-          instance_variable_set %{@#{name}}, block
-         end
-         klass.send(:define_method, name) do |&block|
-           if block.nil?
-             instance_variable_get %{@#{name}}
-           else
-             instance_variable_set %{@#{name}}, block
-           end
-         end
-       end
-     end
+    class EnumAttrAccessor < StrictAttrAccessor
+      add_attr_accessor_constructor AttrAccessorDefaultMethodSet, :enum_accessor
+      include CanNil
+      def initialize name, array, opts={}
+        super name
+        array << nil if @nil and ! array.include? nil
+        @opts = {:array => array}
+        @set = PrimitiveEnumSet.new(*array)
+      end
+    end
 
-     class BooleanAttrAccessor < StrictAttrAccessor
-       AttrAccessors[:boolean_accessor] = self
-       include CanNil
-       include HasPlural
-       def initialize name, opts={}
-         super
-         enum = [true, false]
-         enum << nil if @nil
-         @set = PrimitiveEnumSet.new(*enum )
-       end
-       def define_methods klass
-         super
-         klass.send(:alias_method, %{#{name}?}, name)
-       end
-     end
+    class IntegerAttrAccessor < StrictAttrAccessor
+      add_attr_accessor_constructor AttrAccessorDefaultMethodSet, :integer_accessor, :integer_accessors
+      include CanMinMax
+      include CanCoerceWith
+      include CanNil
+      def initialize *args
+        super
+        unions = []
+        unions << PrimitiveEnumSet.new(nil) if @nil
+        intersects = [KindOfSet.new(Fixnum)]
+        intersects << @range if @range
+        unions << ( intersects.size > 1 ? IntersectedSet.new(*intersects) : intersects[0] )
+        @set = unions.size > 1 ? UnionedSet.new(*unions) : unions[0]
+      end
+    end
 
-     class EnumAttrAccessor < StrictAttrAccessor
-       AttrAccessors[:enum_accessor] = self
-       include CanNil
-       def initialize name, array, opts={}
-         super name
-         array << nil if @nil and ! array.include? nil
-         @opts = {:array => array}
-         @set = PrimitiveEnumSet.new(*array)
-       end
-     end
+    class KindOfAttrAccessor < StrictAttrAccessor
+      add_attr_accessor_constructor AttrAccessorDefaultMethodSet, :kind_of_accessor
+      attr_accessor :module
+      include CanNil
+      def initialize name, mojule
+        opts = {:module => mojule}
+        super name, opts
+        unions = [KindOfSet.new(mojule)]
+        unions << PrimitiveEnumSet(nil) if @nil
+        @set = unions.size > 1 ? UnionedSet.new(*unions) : unions[0]
+      end
+    end
 
-     class IntegerAttrAccessor < StrictAttrAccessor
-       AttrAccessors[:integer_accessor] = self
-       include CanMinMax
-       include CanCoerceWith
-       include CanNil
-       include HasPlural
-       def initialize *args
-         super
-         unions = []
-         unions << PrimitiveEnumSet.new(nil) if @nil
-         intersects = [KindOfSet.new(Fixnum)]
-         intersects << @range if @range
-         unions << ( intersects.size > 1 ? IntersectedSet.new(*intersects) : intersects[0] )
-         @set = unions.size > 1 ? UnionedSet.new(*unions) : unions[0]
-       end
-     end
+    class StringAttrAccessor < StrictAttrAccessor
+      add_attr_accessor_constructor AttrAccessorDefaultMethodSet, :string_accessor, :string_accessors
+      include CanCoerceWith
+      include CanNil
+      attr_accessor :regexp
+      def initialize *args
+        super
+        unions = []
+        unions << PrimitiveEnumSet.new(nil) if @nil
+        intersects = [KindOfSet.new(String)]
+        intersects << RegexpSet.new(@regexp) if @regexp
+        unions << ( intersects.size > 1 ? IntersectedSet.new(*intersects) : intersects[0] )
+        @set = unions.size > 1 ? UnionedSet.new(*unions) : unions[0]
+      end
+    end
 
-     class KindOfAttrAccessor < StrictAttrAccessor
-       AttrAccessors[:kind_of_accessor] = self
-       attr_accessor :module
-       include CanNil
-       def initialize name, mojule
-         opts = {:module => mojule}
-         super name, opts
-         unions = [KindOfSet.new(mojule)]
-         unions << PrimitiveEnumSet(nil) if @nil
-         @set = unions.size > 1 ? UnionedSet.new(*unions) : unions[0]
-       end
-     end
+    class SymbolAttrAccessor < StrictAttrAccessor
+      add_attr_accessor_constructor AttrAccessorDefaultMethodSet, :symbol_accessor, :symbol_accessors
+      include CanCoerceWith
+      include CanNil
+      def initialize name,*args
+        super
+        unions = [KindOfSet.new(Symbol)]
+        unions << PrimitiveEnumSet.new(nil) if @nil
+        @set = unions.size > 1 ? UnionedSet.new(*unions) : unions[0]
+      end
+    end
 
-     class StringAttrAccessor < StrictAttrAccessor
-       AttrAccessors[:string_accessor] = self
-       include CanCoerceWith
-       include CanNil
-       include HasPlural
-       attr_accessor :regexp
-       def initialize *args
-         super
-         unions = []
-         unions << PrimitiveEnumSet.new(nil) if @nil
-         intersects = [KindOfSet.new(String)]
-         intersects << RegexpSet.new(@regexp) if @regexp
-         unions << ( intersects.size > 1 ? IntersectedSet.new(*intersects) : intersects[0] )
-         @set = unions.size > 1 ? UnionedSet.new(*unions) : unions[0]
-       end
-     end
-
-     class SymbolAttrAccessor < StrictAttrAccessor
-       AttrAccessors[:symbol_accessor] = self
-       include CanCoerceWith
-       include CanNil
-       include HasPlural
-       def initialize name,*args
-         super
-         unions = [KindOfSet.new(Symbol)]
-         unions << PrimitiveEnumSet.new(nil) if @nil
-         @set = unions.size > 1 ? UnionedSet.new(*unions) : unions[0]
-       end
-     end
-
-    # ###################### Set-related validators and their exceptions ###################
+    ###################### Set-related validators and their exceptions ###################
 
     class ValidationException < ArgumentError; end
 
