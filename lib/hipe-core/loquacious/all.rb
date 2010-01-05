@@ -74,7 +74,14 @@ module Hipe
       module ClassMethods
         def defined_accessors
           @defined_accessors ||= begin
-            ancestors[1].respond_to?(:defined_accessors) ? ancestors[1].defined_accessors.dup : {} # allows inheiritance of accessors
+            # we first used to just check ancestors[1] but forgot that includes modules
+            # then we used to just check superclass but that infinite looped when there was an eigenclass
+            ancestor = ancestors.slice(1,ancestors.size).detect{|y| y.class == Class && y.respond_to?(:defined_accessors) }
+            if (ancestor)
+              ancestor.defined_accessors.dup
+            else
+              {}
+            end
           end
         end
       end
@@ -304,11 +311,12 @@ module Hipe
     class EnumAttrAccessor < StrictAttrAccessor
       add_attr_accessor_constructor AttrAccessorDefaultMethodSet, :enum_accessor
       include CanNil
+      attr_accessor :enum
       def initialize name, array, opts={}
-        super name
-        array << nil if @nil and ! array.include? nil
-        @opts = {:array => array}
-        @set = PrimitiveEnumSet.new(*array)
+        array << nil if opts[:nil] and ! array.include? nil
+        opts[:enum] = array
+        super(name, opts)
+        @set = PrimitiveEnumSet.new(*opts[:enum])
       end
     end
 
