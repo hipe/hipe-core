@@ -25,7 +25,7 @@ module Hipe
     #  Despite MVC wisdom, Hipe::Table will provide a default renderer for :ascii contexts
 
 
-    include Loquacious::AttrAccessor
+    extend Loquacious::AttrAccessor
     include Lingual::English
 
     class Renderers < HashLikeWithFactories
@@ -118,7 +118,7 @@ module Hipe
     end
 
     class Field
-      include Loquacious::AttrAccessor
+      extend Loquacious::AttrAccessor
       symbol_accessor :name
       boolean_accessor :visible
       integer_accessor :min_width, :min=>1
@@ -179,7 +179,7 @@ module Hipe
     # probably not appropriate for html etc unless we are really lazy and performance isn't an issue
     class PreRenderingAsciiRenderer
       Renderers.register_factory :ascii, self
-      include Loquacious::AttrAccessor
+      extend Loquacious::AttrAccessor
       attr_reader :separator_at
       string_accessor :left
       string_accessor :right

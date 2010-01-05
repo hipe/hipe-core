@@ -127,7 +127,7 @@ module Hipe
       # For example, if your class needs to be able to make setters and getters for proc instance variables,
       #
       #   class MyClass
-      #     include Hipe::Loquacious::AttrAccessor
+      #     extend Hipe::Loquacious::AttrAccessor
       #     block_attr_accessor :row_filter, :field_filter
       #   end
       #
