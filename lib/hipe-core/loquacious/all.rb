@@ -1,11 +1,9 @@
-# bacon spec/loquacious/all.rb
+# bacon spec/loquacious/spec_base.rb
 # bacon spec/struct/spec_table.rb
 
 require 'hipe-core'
 require 'hipe-core/lingual/en'
 require 'hipe-core/struct/open-struct-extended'
-require 'set'
-require 'ostruct'
 
 module Hipe
 
@@ -52,6 +50,8 @@ module Hipe
 
 
     module AttrAccessorImplementation
+      # things in this module are supposed to be api protected.  The only reason someone
+      # should need knowledge of in here is if they are making their own module of class methods (like setter getter makers)
 
       module InstanceMethods
         def handle_interaction_issues issues
@@ -90,7 +90,7 @@ module Hipe
         def extend_object klass
           super
           klass.instance_eval do
-            attr_accessor :on_interaction_issues
+            attr_accessor :on_interaction_issues # @todo in parent child when both extend AttrAccessor, check that ... no clobber
             include InstanceMethods
           end
         end
@@ -151,10 +151,10 @@ module Hipe
     AttrAccessor = AttrAccessorDefaultMethodSet
 
     class StrictAttrAccessor
+      # base-class for every setter-getter-maker in this library.
       # for now they are immutable and stateless
       include OpenSetter
       attr_reader :name, :opts, :block
-      attr_accessor :use
       def initialize name, opts=nil
         raise LoquaciousException.new(
           "For now, symbols only, not #{name.inspect} for foo_accessor names") unless name.kind_of? Symbol
@@ -199,7 +199,7 @@ module Hipe
         name = self.name
         klass.module_eval do
           define_method(%{#{name}=}) do |mixed|
-            mixed = writer.preprocess_value(mixed) if writer.respond_to?(:preprocess_value)
+            mixed = writer.preprocess_value(mixed) if writer.respond_to?(:preprocess_value) # usu. just for coercion
             if writer.include? mixed
               instance_variable_set %{@#{name}}, mixed
             else
@@ -229,6 +229,7 @@ module Hipe
       def message
         data = @table.dup
         data[:provided_value] = @table[:provided_value].inspect
+        data[:property_name] ||= 'value'
         self.message_template_en.gsub(/#\{([a-z_]+)\}/){|x| data[$1.to_sym] }
       end
       def type
@@ -238,6 +239,8 @@ module Hipe
 
 
     ################## can-foo modules #####################################
+    # These are for setter getter makers to use to enable options that are common
+    # to several setter getter makers, options like :min, :max, :use, :nil
 
     module CanCoerceWith
       def self.included klass
@@ -311,6 +314,7 @@ module Hipe
     class EnumAttrAccessor < StrictAttrAccessor
       add_attr_accessor_constructor AttrAccessorDefaultMethodSet, :enum_accessor
       include CanNil
+      include CanCoerceWith
       attr_accessor :enum
       def initialize name, array, opts={}
         array << nil if opts[:nil] and ! array.include? nil
@@ -393,6 +397,8 @@ module Hipe
     end
 
     class UnionedSet < SetSet
+      # this used to be called OrSet.  It is like a chain of boolean statements joined together with "or"
+
       def initialize *sets
         @sets = sets
       end
@@ -428,8 +434,10 @@ module Hipe
       end
     end
 
-    # this is a short-circuiting form.  if we need one we can make a long-circuiting form
     class IntersectedSet < SetSet
+      # this is a short-circuiting form.  if we need one we can make a long-circuiting form
+      # this used to be called AndSet.  It is like a chain of boolean statements joined together with "and"
+
       def initialize *args
         @sets = args
       end

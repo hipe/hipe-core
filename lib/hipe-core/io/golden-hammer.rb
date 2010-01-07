@@ -46,26 +46,29 @@ module Hipe
       #     out.sugested_template = :tables
       #
       def initialize(mixed = '')
+        @messages = []
+        @data = OpenStructExtended.new
+        @template = nil
         case mixed
-        when String: start_str = mixed
+        when String
+          @string = FlushingBufferString.new mixed
         when Hash
-          start_str = ''
+          @string = FlushingBufferString.new ''
           mixed.each do |key,value|
             send %{#{key}=}, value
           end
         else
-          raise TypeError.new("Needed String or Hash had #{mixed.class.inspect}")
+          raise ArgumentError.new("Needed String or Hash had #{mixed.class.inspect}")
         end
-        @data = OpenStructExtended.new
-        @string = FlushingBufferString.new(start_str)
-        @messages = []
-        @template = nil
       end
       def merge!(other)
-        raise TypeError("GoldenHammer can only merge w/ another GoldenHammer, not #{other.inspect}") unless
-          other.kind_of?(GoldenHammer)
+        unless other.kind_of? GoldenHammer
+          debugger
+          raise ArgumentError.new("GoldenHammer can only merge w/ another GoldenHammer, not #{other.inspect}")
+        end
         @string << other.string
         @messages.concat other.messages
+        self.errors.concat other.errors
         @data.deep_merge_strict! other.data
       end
       # assumes ascii context
@@ -87,6 +90,22 @@ module Hipe
         messages = @messages.dup
         messages.unshift(@string) if @string.length > 0
         messages
+      end
+      def data= mixed
+        raise ArgumentError.new("won't clobber existing data!") unless @data._table.size == 0
+        case mixed
+          when Hash then @data = OpenStructExtended.new(mixed)
+          else raise ArgumentError.new("Expecting Hash has #{mixed.class}")
+        end
+      end
+      def message= mixed
+        raise ArgumentError.new("cannot convert #{mixed.class} to String!") unless mixed.respond_to? :to_str
+        raise ArgumentError.new("won't clobber existing messages!") unless @messages.size == 0
+        @messages << mixed
+      end
+      def error= mixed
+        raise ArgumentError.new("won't clobber existing errors!") unless errors.size == 0
+        self.errors << mixed
       end
       def self.[](mixed)
         response = self.new

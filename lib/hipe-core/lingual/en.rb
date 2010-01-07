@@ -249,7 +249,7 @@ module Hipe
                   when :an,:a then :indef
                   else raise e("no") end)
               else
-                raise e(%{can't determine part of speec from #{arg.inspect}})
+                raise e(%{can't determine part of speech from #{arg.inspect}})
               end
             end
           rescue TypeError => e

@@ -67,23 +67,37 @@ module Hipe
 
     def show_only *list
       (@fields_by_name.keys - list).each do |name|
-        @fields_by_name[name].hide()
+        self.field_or_raise(name).hide()
       end
       list.each do |name|
-        @fields_by_name[name].show()
+        self.field_or_raise(name).show()
       end
+    end
+
+    def show_all
+      @fields.each{|x| x.show}
+      true
     end
 
     def field(*args,&block)
       if block
         f = Field.new(self,*args,&block)
-        raise ArgumentError.new("Can't redefine field: #{f.name.inspect}") if @fields_by_name[f.name]
+        if @fields_by_name[f.name]
+          raise ArgumentError.new("For now, can't redefine fields: #{f.name.inspect}")
+        end
         @fields << f
         @fields_by_name[f.name] = f
       else
         raise ArgumentError.new("use field() either to define a field or access one") unless args.size == 0
         @fields_by_name
       end
+    end
+
+    def field_or_raise name
+      unless ret = @fields_by_name[name]
+        raise ArgumentError.new("No such field #{name.inspect}")
+      end
+      ret
     end
 
     def list=list
