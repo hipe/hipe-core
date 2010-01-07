@@ -369,6 +369,8 @@ module Hipe
         def and &block
           Hipe::Lingual::List.join self, ', ', ' and ', &block
         end
+
+        alias_method :say, :and
       end
 
       module Helpers
