@@ -26,19 +26,28 @@ module Hipe
       %{(#{total} total):\n}+(lines * "\n")
     end
 
+    # oops we should have made this an object not a class @todo
+    def self.clear
+      @last_template = nil
+      @last_values = nil
+    end
 
     # say as little of a sentence as you need to.
     def self.minimize template, values
       @last_template ||= nil
       @last_values ||= nil
       if (template == @last_template)
-        # they will alwyas have the same keys, so we look at middle
+        # they will always have the same keys, so we look at middle
         diff = StructDiff::diff(@last_values, values)
         @last_values = values
-        ret = " and "+(diff.middle_diff.map do |key,value|
-          value_string = value.right.to_s.match(/^[0-9]+$/) ? value.right.to_s : %{"#{value.right}"}
-          %{#{key}#{value_string}}
-        end * " with ")
+        if (diff.diff?)
+          ret = " and "+(diff.middle_diff.map do |key,value|
+            value_string = value.right.to_s.match(/^[0-9]+$/) ? value.right.to_s : %{"#{value.right}"}
+            %{#{key}#{value_string}}
+          end * " with ")
+        else
+          ret = "\n" + template_render( template, values )
+        end
       else
         @last_template = template
         @last_values = values

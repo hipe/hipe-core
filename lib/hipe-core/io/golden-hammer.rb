@@ -3,6 +3,7 @@ require 'hipe-core/infrastructure/erroneous'
 require 'hipe-core/struct/open-struct-extended'
 require 'hipe-core/struct/strict-set'
 require 'hipe-core/io/all'
+require 'hipe-core/lingual/en/sentence-compression'
 
 module Hipe
   module Io
@@ -31,7 +32,11 @@ module Hipe
       # then a suggested_template called :foo means that there is expected to be a method called "render_foo()"
       # that takes care of the (usu. ascii) rendering.  (The actual routing will happen in render_with_template())
       # which could be overridden if need be.)
-      attr_accessor :suggested_template
+      attr_accessor :suggested_template, :compress_messages
+
+      # passed to the OpenStructExtended when two objects are not equal and have the same name in the data field.
+      # @see OpenStructExtended.  valid valiues are at least :raise and :pluralize, defaults to :pluralize
+      attr_accessor :on_data_collision
 
 
       # @param mixed [String,Hash]
@@ -46,6 +51,8 @@ module Hipe
       #     out.sugested_template = :tables
       #
       def initialize(mixed = '')
+        @on_data_collision = :pluralize
+        @compress_messages = false
         @messages = []
         @data = OpenStructExtended.new
         @template = nil
@@ -60,17 +67,32 @@ module Hipe
         else
           raise ArgumentError.new("Needed String or Hash had #{mixed.class.inspect}")
         end
+        @data._set(:on_collision, @on_data_collision)
       end
       def merge!(other)
         unless other.kind_of? GoldenHammer
-          debugger
           raise ArgumentError.new("GoldenHammer can only merge w/ another GoldenHammer, not #{other.inspect}")
         end
         @string << other.string
-        @messages.concat other.messages
+        concat_these_messages other.messages
         self.errors.concat other.errors
         @data.deep_merge_strict! other.data
       end
+      def concat_these_messages messages
+        if @compress_messages
+          unless @messages.kind_of?(Hipe::Lingual::En::SentenceCompression)
+            cmp = Hipe::Lingual::En::SentenceCompression.new
+            @messages.each { |message| cmp << message }
+            @messages = cmp
+          end
+          messages.each do |message|
+            @messages << message
+          end
+        else
+          @messages.concat other.messages
+        end
+      end
+
       # assumes ascii context
       def to_s
         if !valid?
@@ -78,9 +100,21 @@ module Hipe
         elsif @suggested_template
           render_with_suggested_template(@suggested_template)
         elsif @string.length > 0 || @messages.size > 0
-          all_messages * "\n"
+          render_all_messages
         else
           @string.to_s
+        end
+      end
+      def render_all_messages
+        if (@compress_messages)
+          lines = []
+          lines << @string.to_s if (@string.length > 0)
+          if @messages.size > 0
+            lines << (@messages.respond_to?(:say) ? @messages.say : @messages.join("\n"))
+          end
+          lines.join("\n")
+        else
+          all_messages * "\n"
         end
       end
       def render_with_suggested_template(template_name)

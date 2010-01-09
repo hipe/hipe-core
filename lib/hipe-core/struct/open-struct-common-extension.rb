@@ -43,7 +43,7 @@ module Hipe
     end
 
     protected
-    def self.deep_merge_strict!(hash1, hash2, path)
+    def self.deep_merge_strict!(hash1, hash2, path, opts)
       middle = hash1.keys & hash2.keys
       right = hash2.keys - hash1.keys
       right.each do |key|
@@ -54,18 +54,24 @@ module Hipe
       middle.each do |key|
         path[i] = key
         left = hash1[key]; right = hash2[key]
-        if left.class != right.class
+        if (left.class != right.class)
           throw :FAIL, "won't compare elements of different classes: #{left.class} and #{right.class}"
         elsif (left.kind_of?(Hash) || left.kind_of?(OpenStructCommonExtension))
           if (left.kind_of?(OpenStructCommonExtension))
             left = left._table
             right = right._table
           end
-          deep_merge_strict!(left, right, path)
+          deep_merge_strict!(left, right, path, opts)
         elsif(left.kind_of?(Array) || left.kind_of?(String))
           left.concat right
-        elsif(left == right) # we might add an option for adding Fixnums and Floats
+        elsif(left == right) # we might add an option for adding together Fixnums and Floats
           next
+        elsif(:pluralize == opts[:on_collision])
+          plural_key = %{#{key}s}
+          plural_key = plural_key.to_sym if key.kind_of?(Symbol)
+          hash1[plural_key] ||= []
+          hash1[plural_key] << hash1.delete(key)
+          hash1[plural_key] << hash2[key]
         else
           throw :FAIL, "collision of elements that were not equal: #{left.inspect} and #{right.inspect}"
         end
@@ -75,11 +81,11 @@ module Hipe
     public
 
     def deep_merge_strict!(os)
-      raise TypeError.new("need OpenStructCommonExtension have #{os.inspect}") unless
+      raise ArgumentError.new("need OpenStructCommonExtension have #{os.inspect}") unless
         os.kind_of? OpenStructCommonExtension
       path = []
       fail = catch(:FAIL) do
-        OpenStructCommonExtension.deep_merge_strict!(@table, os._table, path)
+        OpenStructCommonExtension.deep_merge_strict!(@table, os._table, path, {:on_collision => @on_collision})
         false
       end
       if (fail)
@@ -93,11 +99,27 @@ module Hipe
 
     def to_hash; @table.dup end
     def open_struct_common_extension_init
+      @on_collision = :raise
     end
 
     # use this at your own risk!!!
     # crappy name b/c the namespace of os should in theory by wide open (it's not)
     def _table; @table end
+
+
+    def _set name, value
+      case name
+        when :on_collision
+          case value
+            when :pluralize
+            when :raise
+            else raise ArgumentError.new("invalid on_collision strategy #{value.inspect}")
+          end
+          @on_collision = value
+        else
+          raise ArgumentError.new("invalid property #{name.inspect}")
+      end
+    end
 
     # just for testing ?
     def symbolize_keys_of(hash)

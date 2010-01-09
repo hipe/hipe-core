@@ -192,7 +192,12 @@ module Hipe
     # this renders in two passes so it can set appropriate column widths for ascii\
     # probably not appropriate for html etc unless we are really lazy and performance isn't an issue
     class PreRenderingAsciiRenderer
-      Renderers.register_factory :ascii, self
+      class << self
+        extend Hipe::Loquacious::AttrAccessor
+        symbol_accessor :renderer_name
+      end
+      self.renderer_name = :ascii
+      Renderers.register_factory renderer_name, self
       extend Loquacious::AttrAccessor
       attr_reader :separator_at
       string_accessor :left
@@ -247,7 +252,7 @@ module Hipe
         table.list.each do |item|
           row = []
           visible_fields.each_with_index do |field,index|
-            next unless field.visible?
+            # next unless field.visible?
             rendered = field.renderer.call(item).to_s
             min_widths[index] = rendered.length if rendered.length > min_widths[index]
             row << rendered
@@ -289,7 +294,8 @@ module Hipe
     end
 
     class PreRenderingHorizontalAsciiRenderer < PreRenderingAsciiRenderer
-      Renderers.register_factory :ascii_horizontal, self
+      self.renderer_name = :ascii_horizontal
+      Renderers.register_factory renderer_name, self
       enum_accessor :value_cels_alignment, [:left, :right]
 
       def initialize
@@ -334,7 +340,5 @@ module Hipe
         new_table.render(:ascii)
       end
     end
-
-
   end
 end
