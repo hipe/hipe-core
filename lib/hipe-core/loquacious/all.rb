@@ -30,7 +30,7 @@ module Hipe
 
       include Hipe::Lingual::English
       def open_set opts
-        raise OpenSetterException.new("Need Hash had #{opts.class}") unless opts.kind_of? Hash
+        raise OpenSetterException.new("open_set() needs Hash had #{opts.class}") unless opts.kind_of? Hash
         opts.each do |key,value|
           unless respond_to?( meth=%{#{key}=} )
             list = open_setters

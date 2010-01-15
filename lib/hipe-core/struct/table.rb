@@ -52,6 +52,7 @@ module Hipe
     boolean_accessor :show_header, :nil => true
     enum_accessor :axis, [:horizontal, :vertical]
     string_accessor :name, :nil => true
+    string_accessor :label
     kind_of_accessor :renderers, Renderers
 
     def self.make &block
@@ -61,8 +62,20 @@ module Hipe
       t
     end
 
+    def label
+      @label || @name
+    end
+
     def visible_fields
       fields.select{|f| f.visible? }
+    end
+
+    def has_visible_field? name
+      @fields_by_name[name] && @fields_by_name[name].visible?
+    end
+
+    def has_field? name
+      @fields_by_name.has_key? name
     end
 
     def show_only *list
@@ -134,7 +147,7 @@ module Hipe
     class Field
       extend Loquacious::AttrAccessor
       symbol_accessor :name
-      boolean_accessor :visible
+      boolean_accessors :visible, :show_header
       integer_accessor :min_width, :min=>1
       # integer_accessor :max_width, :min=>1
       string_accessor :label
@@ -142,6 +155,7 @@ module Hipe
       enum_accessor :align, [:left, :right]
 
       def initialize(table,*args,&block)
+        @show_header = true
         @table = table
         @visible = true
         Hipe::HashLikeWriteOnceExtension[opts = {}]

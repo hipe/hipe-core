@@ -51,8 +51,8 @@ module Hipe
       #     out.sugested_template = :tables
       #
       def initialize(mixed = '')
-        @on_data_collision = :pluralize
-        @compress_messages = false
+        @on_data_collision ||= :pluralize
+        @compress_messages = false if @compress_messages.nil?
         @messages = []
         @data = OpenStructExtended.new
         @template = nil
@@ -89,7 +89,7 @@ module Hipe
             @messages << message
           end
         else
-          @messages.concat other.messages
+          @messages.concat messages
         end
       end
 
