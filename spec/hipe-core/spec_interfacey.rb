@@ -42,16 +42,38 @@ module Hipe::Interfacey
     end
     it "should parse switches (s)" do
       definition = <<-COMMAND
-      clone [--template=<template_directory>]
+        [--template=<template_directory>]
         [-l] [-s] [--no-hardlinks] [-q] [-n] [--bare] [--mirror]
-        [-o <name>] [-u <upload-pack>] [--reference <repository>]
+        [-o <name>] [-u <upload-pack>] [--repository <repository>]
         [--depth <depth>] [--recursive] [--alph[a]a[=<jesus>]] [--]
         i am the remainder of the string
       COMMAND
       arr = AssociativeArray.new
       parse = Ability::DefinitionParse.new
-      parse.parse_off_switches definition, arr
-      (arr * ' ').should.equal 'x'
+      parse.parse_off Switch, definition, arr
+      have = arr * ' '
+      want = "[--template <template_directory>] [-l] [-s] [--no-hardlinks]"<<
+      " [-q] [-n] [--bare] [--mirror] [-o <name>] [-u <upload-pack>] "<<
+       "[--repository <repository>]"<<
+      " [--depth <depth>] [--recursive] [-a [jesus]] [--]"
+      have.should.equal want
+      definition.strip.should.equal "i am the remainder of the string"
+    end
+    it "should parse requireds and optionals" do
+      ability = Ability["  jeebis-beavis [-a] [--b[c]d] <eee> <fff> [<ggg>] "]
+      ability.name.should.equal "jeebis-beavis"
+      ability.parameters.size.should.equal 5
+      ["eee","fff"].each do |name|
+        param = ability.parameters[name]
+        param.name.should.equal name
+        param.cli_type.should.equal :required
+        param.parameter_required?.should.equal true
+        param.argument_required?.should.equal true
+      end
+      param = ability.parameters["ggg"]
+      param.name.should.equal "ggg"
+      param.parameter_required?.should.equal false
+      param.argument_required?.should.equal true
     end
   end
 end

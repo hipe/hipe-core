@@ -61,48 +61,74 @@ module Hipe
       end
     end
     module Switch
+      attr_reader :short, :long, :argument_name
       def unparse
         '['+[ (@short[0] && "-#{@short[0]}") || (@long[0] && "--#{@long[0]}"),
         takes_argument? ? argument_required? ? "<#{@argument_name}>" :
           "[#{@argument_name}]" : nil ].compact * ' ' + ']'
       end
+      def name
+        @long.length > 0 ? @long[0] : @short[0]
+      end
+      def takes_argument?
+        !! @argument_name
+      end
       alias_method :inspect, :unparse
+      alias_method :to_s, :unparse
+    end
+    module Required
+      def name; @parameter_name end
+      def unparse; "<#{@parameter_name}>" end
+      alias_method :inspect, :unparse
+      alias_method :to_s, :unparse
+    end
+    module Optional
+      def name; @parameter_name end
+      def unparse; "[<#{@parameter_name}>]" end
+      alias_method :inspect, :unparse
+      alias_method :to_s, :unparse
     end
     class ParameterDefinition
-      CliSwitchRe = %r{ [[:space:]]*
-        \[-
-          (?:
-            ([a-z])
-            |
-            -(?:
-              ([a-z0-9][-a-z0-9]+)
+      CliRegexp = {
+        Switch =>
+          %r{\A [[:space:]]*
+          \[-
+            (?:
+              ([-a-z])
               |
-              ([a-z0-9]*[-a-z0-9]*)\[([a-z0-9])\]([-a-z0-9]*)
+              -(?:
+                ([a-z0-9][-a-z0-9]+)
+                |
+                ([a-z0-9]*[-a-z0-9]*)\[([a-z0-9])\]([-a-z0-9]*)
+              )
             )
-          )
-          (?:
-            (?:[[:space:]]|=)
-            <([a-z_]+)>
-            |
-            [[:space:]]*
-            \[
+            (?:
               (?:[[:space:]]|=)
-              <([a-z_]+)>
-            \]
-          )?
-        \]
-        [[:space:]]*
-      }x
+              <([a-z_][-a-z0-9_]*)>
+              |
+              [[:space:]]*
+              \[
+                (?:[[:space:]]|=)
+                <([a-z_][-a-zA-Z0-9]*)>
+              \]
+            )?
+          \]
+          [[:space:]]*
+        }mix,
+        Required => %r{^[[:space:]]*<([_a-z][-_a-z0-9]*)>[[:space:]]*},
+        Optional => %r{^[[:space:]]*\[<([_a-z][-_a-z0-9]*)>\][[:space:]]*}
+      }
+
       def self.[](md, type)
         ParameterDefinition.new(md, type)
       end
-      attr_reader :short, :long, :argument_name, :argument_required,
-        :parameter_required
+      attr_reader :argument_required, :parameter_required, :cli_type
       alias_method :argument_required?, :argument_required
       alias_method :parameter_required?, :parameter_required
+      alias_method :required?, :parameter_required
       def initialize  md, type
-        case type
-        when :switch
+        case true
+        when type == Switch
           extend Switch
           @cli_type = :switch
           @parameter_required = false
@@ -114,13 +140,21 @@ module Hipe
           end
           @short.compact!
           @long.reject!{|x| x==""}
+        when type == Required
+          extend Required
+          @cli_type = :required
+          @parameter_required = true
+          @argument_required = true
+          @parameter_name = md[1]
+        when type == Optional
+          extend Optional
+          @cli_type = :optional
+          @parameter_required = false
+          @argument_required = true
+          @parameter_name = md[1]
+        else
+          raise ArgumentError.new "bad type: #{type.inspect}"
         end
-      end
-      def takes_argument?
-        !! @argument_name
-      end
-      def name
-        @long.length > 0 ? @long[0] : @short[0]
       end
     end
     class Abilities < AssociativeArray; end
@@ -187,11 +221,12 @@ module Hipe
             name = nil
             catch :end_of_string do
               name = parse_off_name eat_me
-              parse_off_switches eat_me, parameters
-              parse_off_required eat_me, parameters
-              parse_off_optional eat_me, parameters
-              parse_off_splat eat_me, parameters
+              parse_off Switch,   eat_me, parameters
+              parse_off Required, eat_me, parameters
+              parse_off Optional, eat_me, parameters
             end
+            raise Error.new("I don't know what to do with this") if
+              eat_me.length > 0
             return AbilityDefinitionParseTree.new(name, parameters)
           rescue Error => e
             e.context(orig_string, @offset)
@@ -205,31 +240,15 @@ module Hipe
           string.slice!(0,md[1].length)
           md[1].strip
         end
-        def parse_off_switches string, assoc_array
-          while (md = ParameterDefinition::CliSwitchRe.match(string))
-            parameter = ParameterDefinition[md, :switch]
+        def parse_off type, string, assoc_array
+          re = ParameterDefinition::CliRegexp[type]
+          while (md = re.match(string))
+            parameter = ParameterDefinition[md, type]
             assoc_array[parameter.name] = parameter
             @offset += md[0].length
             string.slice!(0,md[0].length)
           end
           throw :end_of_string if ""==string
-        end
-        def parse_off_required string, assoc_array
-          while (md = ParameterDefinition::CliRequiredRe.match(string))
-            parameter = ParameterDefinition[md, :switch]
-            assoc_array[parameter.name] = parameter
-            @offset += md[0].length
-            string.slice!(0,md[0].length)
-            throw :end_of_string if (""==string)
-          end
-        end
-        def parse_off_optional string, assoc_array
-          while (md = ParameterDefinition::CliRequiredRe.match(string))
-            string.slice!(0,md[0].length)
-            parameter = ParameterDefinition[md, :switch]
-            assoc_array[parameter.name] = parameter
-            @offset += md[0].length
-          end
         end
       end
     end
@@ -240,7 +259,7 @@ module Hipe
       end
       def responds_to *args
         ability = Ability[*args]
-        puts "ok"
+        @abilities[ability.name] = ability
       end
     end
   end
