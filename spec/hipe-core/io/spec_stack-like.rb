@@ -4,7 +4,7 @@ require 'bacon'
 require 'hipe-core/io/stack-of-lines-like'
 require 'ruby-debug'
 
-readonly = File.join(File.expand_path('../../../',__FILE__),'spec','io','read-only')
+readonly = File.join(File.dirname(__FILE__),'read-only')
 
 include Hipe::Io
 
