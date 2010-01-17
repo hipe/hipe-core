@@ -1,13 +1,196 @@
+# syntagm
+
+# half of this is to bridge to optparse, half is to parse ability
+# definitions from syntax summaries (in the "git" format)
+#
+# to use this please be familiar with OptionParser and see the example in
+# /bin
+#
+
 require 'optparse'
 module Hipe::Interfacey
+  class AbilityDefinitionContext
+    def cli_ability_definition_init
+      opt_parser = OptionParser.new
+      @optparse_proxy = Cli::OptionParserProxy.new(opt_parser, self)
+    end
+    def opts;  @optparse_proxy  end
+    def cli_after_ability_definition ability_definition
+      accessors = []
+      parameters.each do |param|
+        next unless :switch == param.cli_type
+        accessors << param.name if
+          Hipe::Interfacey.valid_method_name?(param.name)
+      end
+      if @optparse_proxy.num_things > 0
+        ability_definition.cli_set_option_parser_proxy(@optparse_proxy)
+        @optparse_proxy.parse_context.result.attr_accessors(*accessors)
+      end
+    end
+  end
   class Ability
+    def self.from_string_and_proc(string, &block)
+      ability = from_string string
+      ability.merge_in_definition(&block)
+      ability
+    end
     def self.from_string string
       p = Cli::AbilityParse.new
       def_struct = p.parse string
-      return new(def_struct.name, def_struct.parameters)
+      return new([:cli], def_struct.name, def_struct.parameters)
+    end
+    def cli_set_option_parser_proxy optparse_proxy
+      @cli_proxy = optparse_proxy
+    end
+    def parse_request request
+      Cli::RequestParse.new(@cli_proxy).parse_request request
     end
   end
   module Cli
+    class RequestParse
+      # an object of this class manages the parsing of an individual request
+      def initialize proxy
+        @proxy = proxy
+      end
+      def parse_request request
+        opts = parse_opts(request)
+        by_type = Hash.new{|hash,key| hash[key] = []}
+        parameters.each do |param|
+          by_type[param.cli_type] << param if types.include? param.cli_type
+        end
+        requireds = by_type[:required] ?
+          parse_requireds(by_type[:required],request) : []
+        optionals = by_type[:optional] ?
+          parse_optionals(by_type[:optional],request) : []
+        # splats = by_type[:splat] ?
+        #   parse_splats(by_type[:splats],request) : []
+        if (request.unparsed_parameters.size > 0)
+          s = (request.unparsed_parameters.size > 1) ? 's' : ''
+          raise ApplicationArgumentError.new("unexpected parameter#{s}: "<<
+            (request.unparsed_parameters * ', ')
+          )
+        end
+        requireds.concat optionals
+        # requireds.concat(splat)
+        requireds.push(opts) unless by_type[:switch].size == 0
+        requireds
+      end
+      # @return [AssociativeArray]
+      def parse_opts request
+        @proxy.parse_context.result.clear
+        begin
+          @proxy.option_parser.parse!(request.unparsed_parameters)
+          # we jump through some hoops so we can run the defaults thru
+          # the same validation that provided values get
+          provided_keys = @proxy.parse_context.result.keys
+          default_keys = parameters.select do |x|
+            :switch == x.cli_type && x.default_defined?
+          end.map{|x|x.name}
+          defaults = [];
+          (default_keys - provided_keys).each do |key|
+            param = parameters[key]
+            defaults.concat [ param.name_as_switch, param.default ]
+          end
+          @proxy.option_parser.parse!(defaults) if
+            defaults.size>0
+        rescue OptionParser::ParseError => e
+          raise Cli::OptparseParseError.new(e)
+        end
+        parse_result = @proxy.parse_context.result.dup
+        @proxy.parse_context.result.clear # just to be safe we do it twice
+        parse_result
+      end
+      # @todo defaults
+      def parse_optionals list, request
+        min = [list.size, request.unparsed_parameters.size].min
+        request.unparsed_parameters.slice!(0, min)
+      end
+      def parse_requireds list, request
+        if request.unparsed_parameters.size < list.size
+          missing = list.slice(request.unparsed_parameters.size, list.size)
+          s, were = (missing.size > 1) ? ['s','were'] : ['','was']
+          raise ApplicationArgumentError.new(
+            "The required field#{s} #{were} "<<
+            "missing: "<< (missing.map{|x| x.name}*', ')
+          )
+        end
+        request.unparsed_parameters.slice!(0, list.size)
+      end
+    end
+    class OptparseParseError < ApplicationArgumentError
+      # just a wrapper to unify the kinds of runtime errors we throw
+      attr_reader :original_exception
+      def initialize(original_exception)
+        super(original_exception.to_s)
+        @original_exception = original_exception
+      end
+    end
+    class OptionParsingExecutionContext
+      attr_reader :result
+      def initialize proxy
+        @proxy = proxy
+        @result = AssociativeArray.new.no_clobber.key_required
+      end
+      def clear
+        @result.clear
+      end
+    end
+    class OptionParserProxy
+      # this thing allows users to say opts.on(...) in their definitions
+      # and still we can route the defined options into our definition
+      # structure
+      attr_reader :option_parser, :parse_context, :num_things
+      attr_accessor :result
+      def initialize option_parser, ability_definition
+        @num_things = 0
+        @option_parser = option_parser
+        @list_hack = @option_parser.instance_variable_get('@stack')[2].list
+        @defined_parameters = ability_definition.parameters
+        @parse_context = OptionParsingExecutionContext.new(self)
+      end
+      def banner *args, &block
+        @num_things += 1
+        @option_parser.banner(*args, &block)
+      end
+      def separator *args, &block
+        @num_things += 1
+        @option_parser.separator(*args, &block)
+      end
+      # should probably use builtin help instead
+      def to_s
+        @option_parser.to_s
+      end
+      def on *args, &user_block
+        @num_things += 1
+        my_opts = args.last.kind_of?(Hash) ? args.pop : nil
+        orig_result = @option_parser.on(*args)  # we don't give it a block yet
+        switch = @list_hack.last  # the switch just added above
+        my_switch = ParameterDefinition.from_optparse_switch switch, my_opts
+        # if the user didn't provide a block in the definition, the default ..
+        user_block ||= lambda{|value| value} # is just to return the value
+        if my_switch.many?
+          use_this_block = lambda do |value|
+            value = @parse_context.instance_exec(value, &user_block)
+            unless result.has_key?(my_switch.name)
+              @parse_context.result[my_switch.name] = []
+            end
+            @parse_context.result[my_switch.name] = []
+          end
+        else
+          use_this_block = lambda do |value|
+            value = @parse_context.instance_exec(value, &user_block)
+            @parse_context.result[my_switch.name] = value
+          end
+        end
+        switch.instance_variable_set('@block', use_this_block)
+        @defined_parameters[my_switch.name] = my_switch # throws on clobber
+        orig_result
+      end
+      def on_tail *args, &block
+        @num_things += 1
+        @option_parser.on_tail(*args, &block)
+      end
+    end
     class AbilityParseTree < Struct.new(:name, :parameters); end
     class AbilityParse
       def initialize
@@ -38,8 +221,7 @@ module Hipe::Interfacey
       def parse string
         eat_me = string.dup
         begin
-          parameters = AssociativeArray.new
-          parameters.no_clobber
+          parameters = AssociativeArray.new.no_clobber.key_required
           name = nil
           catch :end_of_string do
             name = parse_off_name eat_me
@@ -65,7 +247,7 @@ module Hipe::Interfacey
       def parse_off type, string, assoc_array
         re = type.const_get 'Regexp'
         while (md = re.match(string))
-          parameter = ParameterDefinition.from_cli_parse(md, type)
+          parameter = ParameterDefinition.from_parse(md, type)
           assoc_array[parameter.name] = parameter
           @offset += md[0].length
           string.slice!(0,md[0].length)
@@ -74,6 +256,11 @@ module Hipe::Interfacey
       end
     end
     module SwitchParameter
+      include Defaultable
+      ShortRe   = /^-(.+)$/
+      LongRe    = /^--(.+)$/
+      ArgNameRe = /^ *\[?(.+)\]?$/
+      NoStyleRe = /^\[no-\](.+)/
       Regexp =
         %r{\A [[:space:]]*
         \[-
@@ -99,20 +286,70 @@ module Hipe::Interfacey
         \]
         [[:space:]]*
       }mix
-      attr_reader :short, :long, :argument_name
+      attr_reader :short, :long, :argument_name, :many, :no_style
+      attr_accessor :many
+      alias_method :many?, :many
+      alias_method :no_style?, :no_style
       def unparse
         '['+[ (@short[0] && "-#{@short[0]}") || (@long[0] && "--#{@long[0]}"),
         takes_argument? ? argument_required? ? "<#{@argument_name}>" :
           "[#{@argument_name}]" : nil ].compact * ' ' + ']'
       end
       def name
-        @long.length > 0 ? @long[0] : @short[0]
+        @long.length > 0 ? (@no_style ? yes_style : @long[0]): @short[0]
       end
-      def takes_argument?
-        !! @argument_name
+      def name_as_switch
+        @long.length > 0 ? (@no_style ? "--#{yes_style}" : "--#{@long[0]}"):
+          ( @short.length > 0 ? "-#{@short[0]}" : nil )
       end
+      def yes_style
+        mds = @long.map{|x| NoStyleRe.match(x) }.compact
+        mds.size > 0 and "#{mds[0][1]}"
+      end
+      def takes_argument?;  !! @argument_name end
+      def default_defined?; instance_variable_defined? '@default' end
       alias_method :inspect, :unparse
       alias_method :to_s, :unparse
+      Options = {:many=>true, :default=>true}
+      def init_from_optparse_switch switch, opts=nil
+        opts ||= {}
+        @optparse_switch = switch
+        @cli_type = :switch
+        @required = false
+        @short = @optparse_switch.short.map{|x| ShortRe.match(x).captures[0] }
+        @long = @optparse_switch.long.map{|x| LongRe.match(x).captures[0] }
+        @no_style = !! @long.detect{|x| NoStyleRe =~ x }
+        arg_name = nil
+        if @optparse_switch.arg
+          arg_name = (md = ArgNameRe.match(@optparse_switch.arg) and md[1] )
+          arg_name ||= @optparse_switch.arg.strip
+        end
+        @argument_name = arg_name
+        case @optparse_switch
+        when OptionParser::Switch::NoArgument
+          # rien
+        when OptionParser::Switch::OptionalArgument
+          @argument_required = false
+        when OptionParser::Switch::RequiredArgument
+          @argument_required = true
+        when OptionParser::Switch::PlacedArgument # @todo what is difference?
+          @argument_required = true
+        else raise RutimeError.new(
+          "Unhandled case: #{@optparse_switch.class}")
+        end
+        opts.each do |key,value|
+          raise ArgumentError("invalid option for switch: #{key}") unless
+            Options[key]
+          self.send("#{key}=", value)
+        end
+      end
+      def default= mixed
+        raise ArgumentError.new("For now, default arguments must be Strings"<<
+        " not #{mixed.inspect}, because they are run thru the OptionParser"<<
+        " (for #{self.name_as_switch})") unless mixed.kind_of?(String)
+        # no special handling for no_style options
+        @default = mixed
+      end
     end
     module RequiredParameter
       Regexp = %r{^[[:space:]]*<([_a-z][-_a-z0-9]*)>[[:space:]]*}
@@ -128,16 +365,55 @@ module Hipe::Interfacey
       alias_method :inspect, :unparse
       alias_method :to_s, :unparse
     end
+    module Run
+      # @todo currently no support for object-level inteface objects
+      def cli_run argv
+        request = RequestLite.new(argv)
+        if request.empty?
+          request = self.class.interface.default_request
+        end
+        if request.empty?
+          return ResponseLite.new(:error=>"empty request")
+        end
+        name = request.name
+        ability = self.class.interface.abilities.detect{|x| x.name == name}
+        unless ability
+          return ResponseLite.new(:error=>"can't respond to #{name}")
+        end
+        begin
+          args = ability.parse_request(request)
+        rescue ApplicationArgumentError => e
+          return ResponseLite.new(:error=>e.to_s, :original_exception=>e)
+        end
+        method = Ability.methodize request.name
+        raise ArgumentError("please implement #{method}") unless
+          respond_to? method
+        arity = self.method(method).arity
+        raise ArgumentError.new("expecting #{self.class}##{method} "<<
+          "to take #{args.size} arguments per the definition.  "<<
+          "Its arity is #{arity}.") if
+          ( (arity > 0 && arity != args.length) ||
+            (arity < 0 && arity.abs < (args.length - 1) ) )
+        send(method, *args)
+      end
+    end
   end
   class ParameterDefinition
-    attr_reader :argument_required, :parameter_required, :cli_type
+    attr_reader :argument_required, :cli_type,:optparse_switch
     alias_method :argument_required?, :argument_required
-    def self.from_cli_parse md, type
+
+    def self.from_optparse_switch switch, opts
       pd = self.new
-      pd.init_from_cli_parse(md,type)
+      pd.extend Cli::SwitchParameter
+      pd.init_from_optparse_switch switch, opts
       pd
     end
-    def init_from_cli_parse  md, type
+    def self.from_parse md, type
+      pd = self.new
+      pd.init_from_parse(md,type)
+      pd
+    end
+    def init_from_parse  md, type
       case true
       when type == Cli::SwitchParameter
         extend Cli::SwitchParameter
@@ -166,6 +442,29 @@ module Hipe::Interfacey
       else
         raise ArgumentError.new "bad type: #{type.inspect}"
       end
+    end
+    alias_method :subset_before_cli?, :subset?
+    # for a parameter definition to be a subset of another paramter definition
+    # it must define everything that the other one does, and possibly more
+    # Note that because a definition is usually subtractive,
+    # it can require more information to define a smaller set.
+    # The set of all peple matching the description
+    # "a boy" is larger than the set of all people matching the description
+    # "a boy named sue", and the latter description requires more information.
+    # warning! this isn't perfect. this will return false positives for some
+    # optparse switches b/c we don't bother checking all its properties
+    def subset? other
+      return false unless subset_before_cli? other
+      i_am_subset = true;
+      [:argument_required?, :cli_type].each do |aspect|
+        unless other.send(aspect).nil?
+          if send(aspect) != other.send(aspect)
+            i_am_subset = false
+            break
+          end
+        end
+      end
+      i_am_subset
     end
   end
 end

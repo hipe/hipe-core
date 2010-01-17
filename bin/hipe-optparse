@@ -1,0 +1,85 @@
+#!/usr/bin/env ruby
+# -*- mode: ruby -*-
+
+require 'hipe-core/interfacey'
+
+# This is an attempt at an exact duplicate of the example in optparse
+# (please @see), written as a Hipe::Interfacey::Service.  Note it might
+# also demonstrate that it is shorter, can provide defaults
+
+class OptparseExample
+
+  CODES = %w[iso-2022-jp shift_jis euc-jp utf8 binary]
+  CODE_ALIASES = { "jis" => "iso-2022-jp", "sjis" => "shift_jis" }
+
+  include Hipe::Interfacey::Service
+  interface.speaks :cli
+
+  interface.default_request = 'optparse-example', '--help'
+
+  interface.responds_to('optparse-example') do
+
+    # instead of this we generate the syntax dynamically
+    # opts.banner = "Usage: example.rb [options]"
+
+    opts.separator ""
+            opts.separator "Specific options:"
+
+    opts.on("-r", "--require LIBRARY",
+      "Require the LIBRARY before executing your script", :many=>true)
+
+    opts.on("-i", "--inplace [EXTENSION]",
+         "Edit ARGV files in place",
+         "  (make backup if EXTENSION supplied)") do |ext|
+           (ext || '').sub(/\A\.?(?=.)/, ".")
+    end
+
+    opts.on("--delay N", Float, "Delay N seconds before executing")
+
+    # opts.on("-t", "--time [TIME]", Time, "Begin execution at given time")
+
+    opts.on("-F", "--irs [OCTAL]", OptionParser::OctalInteger,
+         "Specify record separator (default \\0)")
+
+    opts.on("--list x,y,z", Array, "Example 'list' of arguments")
+
+    code_list = (CODE_ALIASES.keys + CODES).join(',')
+    opts.on("--code CODE", CODES, CODE_ALIASES, "Select encoding",
+           "  (#{code_list})", :default=>'utf8')
+
+    opts.on("--type [TYPE]", [:text, :binary, :auto],
+           "Select transfer type (text, binary, auto)", :default=>'auto')
+
+
+    opts.on("-v", "--[no-]verbose", "Run verbosely", :default=>'no')
+
+    opts.separator ""
+    opts.separator "Common options:"
+
+    opts.on_tail("-h", "--help", "Show this message") do
+      puts opts
+      exit
+    end
+
+    opts.on_tail("--version", "Show version") do
+      puts OptionParser::Version.join('.')
+      exit
+    end
+
+    required("beavis", "this is a guy ","from a cartoon")
+    required("butthead", "this is a guy ","from a cartoon")
+    optional("extra_arg", "this is some other guy")
+
+  end
+
+  def optparse_example(beavis, butthead, extra_arg, opts)
+    puts "beavis: #{beavis.inspect} butthead: #{butthead.inspect} extra: "<<
+    "#{extra_arg.inspect}"
+    puts "your parsed opts: "<<opts.to_hash.inspect
+    ''
+  end
+end
+
+if File.basename($PROGRAM_NAME) == File.basename(__FILE__)
+  puts OptparseExample.new.cli_run(ARGV)
+end
