@@ -42,6 +42,7 @@ module Hipe::Interfacey
       a.name.should.equal "nine-lives"
     end
     it "should parse switches (s)" do
+      # the below is from git clone --help
       definition = <<-COMMAND
         [--template=<template_directory>]
         [-l] [-s] [--no-hardlinks] [-q] [-n] [--bare] [--mirror]
@@ -51,7 +52,7 @@ module Hipe::Interfacey
       COMMAND
       arr = AssociativeArray.new
       parse = Cli::AbilityParse.new
-      parse.parse_off Cli::SwitchParameter, definition, arr
+      parse.parse_off_params Cli::SwitchParameter, definition, arr
       have = arr * ' '
       want = "[--template <template_directory>] [-l] [-s] [--no-hardlinks]"<<
       " [-q] [-n] [--bare] [--mirror] [-o <name>] [-u <upload-pack>] "<<

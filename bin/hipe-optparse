@@ -3,8 +3,9 @@
 
 require 'hipe-core/interfacey'
 
-# This is an attempt at an exact duplicate of the example in optparse
-# (please @see), written as a Hipe::Interfacey::Service.  Note it might
+# This is an attempt at an exact duplicate of the options grammer
+# from the example in optparse (please @see),
+# written as a Hipe::Interfacey::Service.  Note it might
 # also demonstrate that it is shorter, can provide defaults
 
 class OptparseExample
@@ -22,8 +23,8 @@ class OptparseExample
     # instead of this we generate the syntax dynamically
     # opts.banner = "Usage: example.rb [options]"
 
-    opts.separator ""
-            opts.separator "Specific options:"
+    opts.separator " "
+    opts.separator "Specific options:"
 
     opts.on("-r", "--require LIBRARY",
       "Require the LIBRARY before executing your script", :many=>true)
@@ -36,6 +37,7 @@ class OptparseExample
 
     opts.on("--delay N", Float, "Delay N seconds before executing")
 
+    # @todo optparse complains about Time
     # opts.on("-t", "--time [TIME]", Time, "Begin execution at given time")
 
     opts.on("-F", "--irs [OCTAL]", OptionParser::OctalInteger,
@@ -53,28 +55,25 @@ class OptparseExample
 
     opts.on("-v", "--[no-]verbose", "Run verbosely", :default=>'no')
 
-    opts.separator ""
+    opts.separator " "
     opts.separator "Common options:"
 
-    opts.on_tail("-h", "--help", "Show this message") do
-      puts opts
-      exit
-    end
+    opts.on("-h", "--help", "Show this message", &help)
 
-    opts.on_tail("--version", "Show version") do
-      puts OptionParser::Version.join('.')
-      exit
-    end
+    opts.on("--version", "Show version", &version)
+
+    opts.separator " "
+    opts.separator "Parameters: "
 
     required("beavis", "this is a guy ","from a cartoon")
-    required("butthead", "this is a guy ","from a cartoon")
-    optional("extra_arg", "this is some other guy")
+    required("butthead", "this is some other guy")
+    optional("bob", "this is a guy ","from a movie",:default=>"bob's default")
 
   end
 
-  def optparse_example(beavis, butthead, extra_arg, opts)
-    puts "beavis: #{beavis.inspect} butthead: #{butthead.inspect} extra: "<<
-    "#{extra_arg.inspect}"
+  def optparse_example(beavis, butthead, bob, opts)
+    puts "beavis: #{beavis.inspect} butthead: #{butthead.inspect} "<<
+    "optional bob: #{bob.inspect}"
     puts "your parsed opts: "<<opts.to_hash.inspect
     ''
   end

@@ -96,16 +96,17 @@ module Hipe
     module Defaultable
       attr_accessor :default
       def default_defined?
-        instance_variable_defined? :default
+        instance_variable_defined? '@default'
       end
     end
-    module OptionalParameterDefinition
+    module OptionalParameter
       include Defaultable
     end
+    module RequiredParameter
+    end
     class ParameterDefinition
-      attr_reader :required, :name
+      attr_reader :required, :desc, :name
       alias_method :required?, :required
-      def hash; name; end
       def subset? other
         name == other.name && required? == other.required?
       end
@@ -119,7 +120,10 @@ module Hipe
         end
       end
       def init_from_definition_block type, name, *args
-        extend OptionalParameterDefinition if :optional == type
+        extend case type
+          when :optional: OptionalParameter
+          when :required: RequiredParameter
+        end
         opts = args.last.kind_of?(Hash) ? args.pop : {}
         opts.each do |key,value|
           raise ArgumentError.new("unrecognzied option: #{key}") unless
@@ -145,9 +149,10 @@ module Hipe
     # similar in that it produces a list of parameter definitions, different
     # in that it yeilds it apis to the caller, instead of parsing a string.
     class AbilityDefinitionContext
-      attr_reader :parameters, :name
-      def initialize
-        @parameters = AssociativeArray.new.no_clobber.key_required
+      attr_reader :parameters, :name, :ability
+      def initialize ability
+        @parameters = AssociativeArray.new.no_clobber.require_key
+        @ability = ability
       end
       def required(name,*args)
         param =
@@ -162,7 +167,7 @@ module Hipe
     end
     # OrderedHash can be annoying.  This achieves what we want in 10% sloc.
     # additional features: no_clobber, merge_strict_recursivesque!,
-    # key_required (meaning non Fixnum, non nil key), attr_accessors
+    # require_key (meaning non Fixnum, non nil key), attr_accessors
     # (sort of open struct-like)
     # @todo - move this to hipe-core/struct/ if you want to use it elsewhere
     # but why should you? you will always want to use Interfacey too!
@@ -173,7 +178,7 @@ module Hipe
         :sort, :sort!
       def initialize
         super
-        @key_required = false
+        @require_key = false
         @clobber = true
         @keys = {}
         @keys_order = []
@@ -185,7 +190,7 @@ module Hipe
           (i < length) : @keys.has_key?(key))
           raise @clobber_exception_class.new("Won't clobber #{key.inspect}")
         end
-        if (@key_required and !key || key.kind_of?(Fixnum))
+        if (@require_key and !key || key.kind_of?(Fixnum))
           raise ArgumentError.new("This array required a non-numeric "<<
           "key, not #{key.inspect}")
         end
@@ -206,7 +211,7 @@ module Hipe
       end
       def keys;          @keys_order.dup             end
       def has_key? key;  !! @keys[key]               end
-      def key_required;  @key_required = false; self end
+      def require_key;  @require_key = false; self end
       def no_clobber(throw_class=nil)
         @clobber = false;
         @clobber_exception_class = throw_class || ApplicationArgumentError
@@ -269,7 +274,6 @@ module Hipe
         end
       end
     end
-    class Abilities < AssociativeArray; end
     class Ability
       NameRe = %r|^([[:space:]]*[a-z][-a-z0-9_]+[[:space:]]*)(.*)$|
       attr_reader :name, :parameters
@@ -298,11 +302,13 @@ module Hipe
       def self.[](mixed)
         define mixed
       end
+
       def self.methodize name
         name.to_s.gsub('-','_')
       end
+
       def merge_in_definition &block
-        definition = AbilityDefinitionContext.new
+        definition = AbilityDefinitionContext.new self
         # rack_ability_definition_init(), cli_ability_definition_init()
         @speaks.each do |speak|
           definition.send("#{speak}_ability_definition_init")
@@ -327,7 +333,7 @@ module Hipe
       attr_reader :abilities, :can_speak, :default_request
       def initialize implementor
         @default_request = nil
-        @abilities = Abilities.new
+        @abilities = AssociativeArray.new.no_clobber.require_key
         @implementor_class = implementor
         @speaks = []
       end
@@ -362,8 +368,12 @@ module Hipe
         @default_request || RequestLite.new(nil)
       end
     end
-    # this is semi-parsed but not really.
-    class RequestLite < Struct.new(:name, :unparsed_parameters)
+    # this might become a plain old class, not a struct
+    class RequestLite < Struct.new(
+        :name,
+        :unparsed_parameters,
+        :parsed_parameters
+    )
       def initialize args
         if args.nil?
           self.name = nil
@@ -423,6 +433,35 @@ module Hipe
     ValidMethodNameRe = /^[_a-z][_a-z0-9]*/i
     def self.valid_method_name? str
       ValidMethodNameRe =~ str
+    end
+
+    module Lingual
+      # we didn't wan't a dependency on en.rb just for this,
+      # and this revisits the interface
+      module En
+        # experimental -- would be better to have one object per object?
+        def self.included mod
+          speaker = Speakers::En.new
+          mod.send(:define_method, :en){ speaker }
+        end
+      end
+      module Speakers
+        class Speaker; end
+        class En < Speaker
+          # oxford comma
+          def join(list, sep1=', ', sep2=' and ', &block)
+            list = list.map(&block) if block
+            case list.size
+            when 0 then 'nothing'
+            when 1 then list[0]
+            else
+              joiners = ['',sep2]
+              joiners += ::Array.new(list.size-2,sep1) if list.size >= 3
+              list.zip(joiners.reverse).flatten.join
+            end
+          end
+        end
+      end
     end
   end
 end
