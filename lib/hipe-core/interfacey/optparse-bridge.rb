@@ -73,14 +73,15 @@ module Hipe::Interfacey
           def _banner; @banner end
         end
         unless optparse._banner
-          optparse.banner =
+          banner =
           [
-            "usage: #{optparse.program_name}",
+            "\nusage: #{optparse.program_name}",
             "#{definition_context.ability.name}",
             by_type[:switch].map{|x| x.unparse}*' ',
             by_type[:required].map{|x| x.unparse}*' ',
             by_type[:optional].map{|x| x.unparse}*' '
           ].reject{|x|""==x} * ' '
+          optparse.banner = banner
         end
         optparse.stack = orig_optparser.instance_variable_get('@stack').dup
         these = [:required, :optional, :splat]
@@ -95,6 +96,7 @@ module Hipe::Interfacey
           end
         end
         response = optparse.to_s
+        Cli.add_linebreaks_to_syntax_summary! response
         throw :cli_early_exit, response
       end
     end
@@ -106,6 +108,46 @@ module Hipe::Interfacey
     end
   end
   module Cli
+
+    # if the syntax summary line (matching "usage:..") is longer than any
+    # other line, try to break the summary after ] or (> not followed by ])
+    # whichever you find first, such that the new newlines you insert have
+    # a (hard-coded for now) indent after them and the resulting lines are
+    # not longer than the max_width.  easy.
+    def self.add_linebreaks_to_syntax_summary! banner
+      indent = ' '*4 # hardcoded in optparse too :/
+      lines = banner.split("\n")
+      idx = lines.index{|x| x=~ /^ *usage:/}
+      return unless idx
+      summary_line = lines[idx]
+      lines_before_summary = lines.slice(0,idx)
+      lines_after_summary = lines.slice(idx+1, lines.length)
+      return unless lines_after_summary
+      lines_wo_summary = lines_before_summary + lines_after_summary
+      max_width = lines_wo_summary.map{|x| x.length}.max
+      max_width = [40, max_width].max  # let's not be ridiculous
+      return if summary_line.length <= max_width
+      re =/^
+        (.{1,#{max_width-1}}\]|.{1,#{max_width-2}}>(?!\]))
+        [[:space:]]*
+        (.+)
+      /x
+      return unless md = summary_line.match(re)
+      first_line = md[1]
+      remainder = md[2]
+      new_max_width = max_width - indent.length
+      re = /
+        [[:space:]]*
+        (.{1,#{new_max_width-1}}\]|.{1,#{new_max_width-2}}>(?!\]))
+      /x
+      remainder = indent + remainder.gsub(re,"\\1\n#{indent}")
+      banner.replace [ lines_before_summary,
+        first_line,
+        remainder,
+        lines_after_summary
+      ].flatten * "\n"
+      nil
+    end
     class RequestParse
       include Lingual::En
 
@@ -345,7 +387,7 @@ module Hipe::Interfacey
       include Defaultable
       ShortRe   = /^-(.+)$/
       LongRe    = /^--(.+)$/
-      ArgNameRe = /^ *\[?(.+)\]?$/
+      ArgNameRe = /^ *\[?([^\]]+)\]?$/
       NoStyleRe = /^\[no-\](.+)/
       CliRegexp =
         %r{\A [[:space:]]*
