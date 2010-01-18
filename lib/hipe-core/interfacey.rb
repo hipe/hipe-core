@@ -85,6 +85,7 @@ module Hipe
     class ArgumentError < ::ArgumentError; include Exception end
     class RuntimeError < ::RuntimeError; include Exception end
     class ApplicationArgumentError < ArgumentError; end
+    class Paradigm < Struct.new(:module); end
     module Service
       def self.included mod
         class << mod
@@ -93,16 +94,122 @@ module Hipe
         mod.interface = Interface.new(mod)
       end
     end
-    module Defaultable
-      attr_accessor :default
-      def default_defined?
-        instance_variable_defined? '@default'
+    class Interface
+      attr_reader :abilities, :can_speak, :default_request
+      def initialize implementor
+        @default_request = nil
+        @abilities = AssociativeArray.new.no_clobber.require_key
+        @implementor_class = implementor
+        @speaks = AssociativeArray.new.no_clobber.require_key
+      end
+      # @oldschool-setter-getter
+      def speaks paradigm_name=nil
+        return @speaks.keys.dup if paradigm_name.nil?
+        case paradigm_name
+        when :cli
+          if ! @speaks.has_key?(:cli)
+            require 'hipe-core/interfacey/optparse-bridge'
+            para = Paradigm.new(Cli)
+            @speaks[:cli] = para
+            para.module.init_service_class @implementor_class
+          end
+        else
+          raise ArgumentError.new("can't speak #{paradigm_name.inspect}")
+        end
+      end
+      def _speaks
+        @speaks
+      end
+      def can_speak? paradigm
+        @speaks.has_key? paradigm
+      end
+      def responds_to *args, &proc
+        ability = Ability.new(args, @speaks, &proc)
+        @abilities[ability.name] = ability
+      end
+      #
+      # note that caller can set a request name and parameters:
+      # interface.default_request = 'foo', {'bar'=>'baz'}
+      def default_request=(args)
+        @default_request = RequestLite.new(args)
+      end
+      def default_request
+        @default_request || RequestLite.new(nil)
+      end
+      def on_method_missing(impementing_object, ability, request)
+        @speaks.each do |paradigm|
+          defaults = paradigm.module.const_get('DefaultImplementations')
+          if defaults.respond_to?(ability.method_name)
+            return defaults.send(
+              ability.method_name,
+              impementing_object,
+              self,
+              ability,
+              request
+            )
+          end
+        end
+        raise ArgumentError.new("please implement #{ability.method_name}")
       end
     end
-    module OptionalParameter
-      include Defaultable
-    end
-    module RequiredParameter
+    class Ability
+      NameRe = %r|^([[:space:]]*[a-z][-a-z0-9_]+[[:space:]]*)(.*)$|
+      attr_accessor :method_name
+      attr_reader :name, :parameters, :speaks, :desc
+      def initialize(args, speaks=nil, &proc)
+        args = [args] if String===args
+        @speaks = speaks
+        @parameters = AssociativeArray.new.no_clobber.require_key
+        opts = args.last.kind_of?(Hash) ? args.pop : nil
+        first_string = args.shift
+        parse_in_first_string first_string
+        parse_in_args args
+        @desc ||= []
+        if opts
+          @speaks.keys.each do |speaks|
+            method = "#{speaks}_parse_in_opts!"
+            send(method, opts) if respond_to? method
+          end
+          raise ArgumentError.new(
+            "Unexpected opt(s):",opts.keys.map{|x| x.to_s} * ', '
+          ) if opts.size > 0
+        end
+        merge_in_definition(&proc) if proc
+      end
+      # this gets superceded by cli
+      def parse_in_first_string string
+        (md = NameRe.match(string) and md[2] == "") or
+          raise ArgumentError.new("bad name: #{string.inspect}")
+        @name = md[1].strip
+      end
+      def parse_in_args args
+        raise ArgumentError.new("expecting description array") if
+          args.detect{|x| !String===x}
+        @desc = args
+      end
+      def name=(name)
+        raise ArgumentError.new("names can only be set once") if @name
+        @name = name
+      end
+      def merge_in_definition &block
+        definition = AbilityDefinitionContext.new self
+        @speaks.keys.each do |speak|
+          definition.send("#{speak}_before_ability_definition")
+        end
+        raise ArgumentError.new("Ability definition blocks don't take "<<
+        %{arguments for now (ability: "#{name}")}) if block.arity > 0
+        definition.instance_eval(&block)
+        @speaks.keys.each do |speak|
+          definition.send("#{speak}_after_ability_definition", self)
+        end
+        @parameters.merge_strict_recursivesque! definition.parameters
+      end
+      def self.methodize name
+        name.to_s.gsub('-','_')
+      end
+      def method_name
+        @method_name || Ability.methodize(name)
+      end
     end
     class ParameterDefinition
       attr_reader :required, :desc, :name
@@ -142,6 +249,18 @@ module Hipe
         @desc = args
       end
     end
+    module Defaultable
+      attr_accessor :default
+      def default_defined?
+        instance_variable_defined? '@default'
+      end
+    end
+    module OptionalParameter
+      include Defaultable
+    end
+    module RequiredParameter
+    end
+
     # This class provides an execution context in which the body
     # of ability defintions are executed.  The individual paradigms
     # (cli etc.) might define methods for it.
@@ -165,6 +284,74 @@ module Hipe
         @parameters[param.name] = param
       end
     end
+
+    # this might become a plain old class, not a struct
+    class RequestLite < Struct.new(
+        :name,
+        :unparsed_parameters,
+        :parsed_parameters
+    )
+      def initialize args
+        if args.nil?
+          self.name = nil
+          self.unparsed_parameters = nil
+        elsif args.kind_of? String
+          self.name = args
+          self.unparsed_parameters = nil
+        elsif args.respond_to? :keys
+          my_args = args.dup
+          self.name = my_args.delete('request-name')
+          self.unparsed_parameters = my_args
+        elsif args.respond_to? :shift
+          my_args = args.dup
+          self.name = my_args.shift
+          self.unparsed_parameters = my_args
+        else
+          raise ArgumentError.new("Can't figure out how to create a request"<<
+          " from #{args.inspect}")
+        end
+      end
+      def empty?
+        name.nil? &&
+          (unparsed_parameters.nil? || unparsed_parameters.empty?)
+      end
+    end
+
+    class ResponseLite
+      attr_reader :original_exception, :errors, :messages
+      def initialize(args=nil)
+        @errors = []
+        @messages = []
+        if args
+          @errors.push(args.delete(:error)) if args[:error]
+          @messages.push(args.delete(:message)) if args[:message]
+          @original_exception = args.delete(:original_exception) if
+            args[:original_exception]
+          raise ArgumentError.new("no: "+args.keys.map{|x|x.to_s}) if
+            args.keys.size > 0
+        end
+      end
+      def puts str
+        @messages.push str.sub(/\n\z/, '')
+      end
+      def << str
+        if (@messages.size == 0)
+          @messages.push ""
+        end
+        @messages.last << str
+      end
+      def valid?
+        @errors.size == 0
+      end
+      def to_s
+        if valid?
+          @messages * "\n"
+        else
+          @errors * "\n"
+        end
+      end
+    end
+
     # OrderedHash can be annoying.  This achieves what we want in 10% sloc.
     # additional features: no_clobber, merge_strict_recursivesque!,
     # require_key (meaning non Fixnum, non nil key), attr_accessors
@@ -274,167 +461,6 @@ module Hipe
         end
       end
     end
-    class Ability
-      NameRe = %r|^([[:space:]]*[a-z][-a-z0-9_]+[[:space:]]*)(.*)$|
-      attr_reader :name, :parameters
-      # we keep thinking of some transpartent way to iterate over the
-      # different 'iteraction paradigms' (ug) and giving them a chance
-      # to respond to a definition - i guess it is with
-      #    AbilityDefinitionContext#instance_eval()
-      def self.define(*args) # block is in there
-        little_class_names = args.map{|x| x.class.to_s.downcase}
-        factory_method = 'from_' + little_class_names * '_and_'
-        # from_string_and_proc(), from_string(), etc
-        if respond_to?(factory_method)
-          if args.last.kind_of? Proc
-            proc = args.pop
-            send(factory_method, *args, &proc)
-          else
-            send(factory_method, *args)
-          end
-        else
-          raise ArgumentError.new("Can't define ability #{factory_method}")
-        end
-      end
-      # factory constructor.
-      # note that with the [] form we can't pass blocks. kind of useless
-      # except for making it look pretty when testing
-      def self.[](mixed)
-        define mixed
-      end
-
-      def self.methodize name
-        name.to_s.gsub('-','_')
-      end
-
-      def merge_in_definition &block
-        definition = AbilityDefinitionContext.new self
-        # rack_ability_definition_init(), cli_ability_definition_init()
-        @speaks.each do |speak|
-          definition.send("#{speak}_ability_definition_init")
-        end
-        definition.instance_eval(&block)
-        @speaks.each do |speak|
-          definition.send("#{speak}_after_ability_definition", self)
-        end
-        @parameters.merge_strict_recursivesque! definition.parameters
-      end
-      # Ability objects are always created by the individual paradigms.
-      # we will eventually deal with multiple paradigms
-      def initialize speaks, name, parameter_definitions=nil
-        raise ArgumentError.new("no: #{speaks.inspect}") unless
-          speaks.kind_of? Array
-        @speaks = speaks
-        @name = name
-        @parameters = parameter_definitions || AssociativeArray.new
-      end
-    end
-    class Interface
-      attr_reader :abilities, :can_speak, :default_request
-      def initialize implementor
-        @default_request = nil
-        @abilities = AssociativeArray.new.no_clobber.require_key
-        @implementor_class = implementor
-        @speaks = []
-      end
-      # @oldschool-setter-getter
-      def speaks context=nil
-        return @speaks.dup if context.nil?
-        case context
-        when :cli
-          if ! @speaks.include?(:cli)
-            require 'hipe-core/interfacey/optparse-bridge'
-            @implementor_class.send :include, Cli::Run
-            @speaks << :cli
-          end
-        else
-          raise ArgumentError.new("can't speak #{context.inspect}")
-        end
-      end
-      def can_speak? paradigm
-        @speaks.include? paradigm
-      end
-      def responds_to *args, &block
-        args.push block
-        ability = Ability.define(*args,&block)
-        @abilities[ability.name] = ability
-      end
-      # note that caller can set a request name and parameters:
-      # interface.default_request = 'foo', {'bar'=>'baz'}
-      def default_request=(args)
-        @default_request = RequestLite.new(args)
-      end
-      def default_request
-        @default_request || RequestLite.new(nil)
-      end
-    end
-    # this might become a plain old class, not a struct
-    class RequestLite < Struct.new(
-        :name,
-        :unparsed_parameters,
-        :parsed_parameters
-    )
-      def initialize args
-        if args.nil?
-          self.name = nil
-          self.unparsed_parameters = nil
-        elsif args.kind_of? String
-          self.name = args
-          self.unparsed_parameters = nil
-        elsif args.respond_to? :keys
-          my_args = args.dup
-          self.name = my_args.delete('request-name')
-          self.unparsed_parameters = my_args
-        elsif args.respond_to? :shift
-          my_args = args.dup
-          self.name = my_args.shift
-          self.unparsed_parameters = my_args
-        else
-          raise ArgumentError.new("Can't figure out how to create a request"<<
-          " from #{args.inspect}")
-        end
-      end
-      def empty?
-        name.nil? &&
-          (unparsed_parameters.nil? || unparsed_parameters.empty?)
-      end
-    end
-    class ResponseLite
-      attr_reader :original_exception, :errors, :messages
-      def initialize(args=nil)
-        @errors = []
-        @messages = []
-        if args
-          @errors.push(args.delete(:error)) if args[:error]
-          @messages.push(args.delete(:message)) if args[:message]
-          @original_exception = args.delete(:original_exception) if
-            args[:original_exception]
-          raise ArgumentError.new("no: "+args.keys.map{|x|x.to_s}) if
-            args.keys.size > 0
-        end
-      end
-      def << str
-        if (@messages.size == 0)
-          @messages.push ""
-        end
-        @messages.last << str
-      end
-      def valid?
-        @errors.size == 0
-      end
-      def to_s
-        if valid?
-          @messages * "\n"
-        else
-          @errors * "\n"
-        end
-      end
-    end
-    ValidMethodNameRe = /^[_a-z][_a-z0-9]*/i
-    def self.valid_method_name? str
-      ValidMethodNameRe =~ str
-    end
-
     module Lingual
       # we didn't wan't a dependency on en.rb just for this,
       # and this revisits the interface
@@ -462,6 +488,10 @@ module Hipe
           end
         end
       end
+    end
+    ValidMethodNameRe = /^[_a-z][_a-z0-9]*/i
+    def self.valid_method_name? str
+      ValidMethodNameRe =~ str
     end
   end
 end

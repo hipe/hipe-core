@@ -11,36 +11,46 @@ require 'optparse'
 module Hipe::Interfacey
   module RequiredParameter
     CliRegexp = %r{^[[:space:]]*<([_a-z][-_a-z0-9]*)>[[:space:]]*}
-    def unparse; "<#{@name}>" end
-    alias_method :inspect, :unparse
-    alias_method :to_s, :unparse
+    def cli_unparse; "<#{@name}>" end
+    alias_method :inspect, :cli_unparse
+    alias_method :to_s, :cli_unparse
   end
 
   module OptionalParameter
     CliRegexp = %r{^[[:space:]]*\[<([_a-z][-_a-z0-9]*)>\][[:space:]]*}
-    def unparse; "[<#{@name}>]" end
-    alias_method :inspect, :unparse
-    alias_method :to_s, :unparse
+    def cli_unparse; "[<#{@name}>]" end
+    alias_method :inspect, :cli_unparse
+    alias_method :to_s, :cli_unparse
   end
 
   class Ability
     attr_accessor :cli_optparse_proxy
-    def self.from_string_and_proc(string, &block)
-      ability = from_string string
-      ability.merge_in_definition(&block)
-      ability
+    attr_reader :cli_aliases
+    # factory constructor.
+    # note that with this form we can't pass blocks. kind of useless
+    # except for making it look pretty when testing
+    def self.[](string)
+      Ability.new(string,[:cli=>Cli])
     end
-    def self.from_string string
-      p = Cli::AbilityParse.new
-      def_struct = p.parse string
-      return new([:cli], def_struct.name, def_struct.parameters)
+    def cli_parse_in_opts! opts
+      if opts[:aliases]
+        @cli_aliases = opts.delete(:aliases)
+      end
+      nil
+    end
+    # throw on unparsable string
+    def parse_in_first_string string
+      struct = Cli::AbilityParse.new.parse string
+      @name = struct.name
+      @parameters.merge_strict_recursivesque! struct.parameters
+      nil
     end
   end
 
   class AbilityDefinitionContext
     # instance methods defined here are available in the definition blocks
     attr_reader :optparse_proxy
-    def cli_ability_definition_init
+    def cli_before_ability_definition
       opt_parser = OptionParser.new
       @optparse_proxy = Cli::OptionParserProxy.new(opt_parser, self)
     end
@@ -75,11 +85,11 @@ module Hipe::Interfacey
         unless optparse._banner
           banner =
           [
-            "\nusage: #{optparse.program_name}",
+            "usage: #{optparse.program_name}",
             "#{definition_context.ability.name}",
-            by_type[:switch].map{|x| x.unparse}*' ',
-            by_type[:required].map{|x| x.unparse}*' ',
-            by_type[:optional].map{|x| x.unparse}*' '
+            by_type[:switch].map{|x| x.cli_unparse}*' ',
+            by_type[:required].map{|x| x.cli_unparse}*' ',
+            by_type[:optional].map{|x| x.cli_unparse}*' '
           ].reject{|x|""==x} * ' '
           optparse.banner = banner
         end
@@ -91,7 +101,7 @@ module Hipe::Interfacey
               # we need to give the swith a unique name even tho we rewrite it
               optparse.on("--#{param.name}", *param.desc)
               switch = optparse.last
-              switch.instance_variable_set('@long',[param.unparse])
+              switch.instance_variable_set('@long',[param.cli_unparse])
             end
           end
         end
@@ -108,6 +118,10 @@ module Hipe::Interfacey
     end
   end
   module Cli
+
+    def self.init_service_class implementor
+      implementor.send :include, Run
+    end
 
     # if the syntax summary line (matching "usage:..") is longer than any
     # other line, try to break the summary after ] or (> not followed by ])
@@ -418,7 +432,7 @@ module Hipe::Interfacey
       attr_accessor :many
       alias_method :many?, :many
       alias_method :no_style?, :no_style
-      def unparse
+      def cli_unparse
         '['+[ (@short[0] && "-#{@short[0]}") || (@long[0] && "--#{@long[0]}"),
         takes_argument? ? argument_required? ? "<#{@argument_name}>" :
           "[#{@argument_name}]" : nil ].compact * ' ' + ']'
@@ -436,8 +450,8 @@ module Hipe::Interfacey
       end
       def takes_argument?;  !! @argument_name end
       def default_defined?; instance_variable_defined? '@default' end
-      alias_method :inspect, :unparse
-      alias_method :to_s, :unparse
+      alias_method :inspect, :cli_unparse
+      alias_method :to_s, :cli_unparse
       Options = {:many=>true, :default=>true}
       def init_from_optparse_switch switch, opts=nil
         opts ||= {}
@@ -482,39 +496,59 @@ module Hipe::Interfacey
 
     module Run
       # this gets mixed in to the implementor to give it cli_run
-      # @todo currently no support for object-level inteface objects
       def cli_run argv
+        # @todo currently no support for object-level inteface objects
+        interface = self.class.interface
         request = RequestLite.new argv
-        request = self.class.interface.default_request if request.empty?
+        request = interface.default_request if request.empty?
         return ResponseLite.new(:error=>"empty request")  if request.empty?
+        # @todo don't change default object -- maybe dup it?
+        request.unparsed_parameters = [] if (request.unparsed_parameters.nil?)
         name = request.name
-        ability = self.class.interface.abilities.detect{|x| x.name == name}
-        unless ability
-          return ResponseLite.new(:error=>"don't know how to respond to "<<
-            %{"#{request.name}"})
-        end
+        ability = interface.abilities.detect{|x| x.name == name} or
+          return ResponseLite.new(:error=>
+            %{don't know how to respond to "#{request.name}"})
+        method_name = ability.method_name
+        return interface.on_method_missing(self, ability, request) unless
+          respond_to? method_name
         begin
-          # kind of ugly but necessary. some options need to short-circuit
-          # the further validation of required, optional parameters,
-          # like --help
           early_exit = catch(:cli_early_exit) do
             Cli::RequestParse.parse_request! ability, request
-          end
-          return early_exit if early_exit
+          end and return early_exit
         rescue ApplicationArgumentError => e
           return ResponseLite.new(:error=>e.to_s, :original_exception=>e)
         end
         args = request.parsed_parameters
-        method = Ability.methodize request.name
-        raise ArgumentError("please implement #{method}") unless
-          respond_to? method
-        arity = self.method(method).arity
+        arity = self.method(method_name).arity
         raise ArgumentError.new("expecting #{self.class}##{method} "<<
           "to take #{args.size} arguments per the definition.  "<<
           "Its arity is #{arity}.") if
           ( (arity > 0 && arity != args.length) ||
             (arity < 0 && arity.abs < (args.length - 1) ) )
-        send(method, *args)
+        send(method_name, *args)
+      end
+    end
+    module DefaultImplementations
+      def self.help(impementing_object,interface,ability,request)
+        # flagrant hack again
+        optparse = OptionParser.new
+        class << optparse;
+          attr_accessor :stack
+          def last; @stack[2].instance_variable_get('@list').last end
+        end
+        optparse.banner = "usage: #{optparse.program_name} <command> "<<
+        " [options]"
+        optparse.separator ' '
+        optparse.separator 'available commands:'
+        interface.abilities.each do |ability|
+          optparse.on("--#{ability.name}", *ability.desc)
+          switch = optparse.last
+          switch.instance_variable_set('@long',[ability.name])
+        end
+        ResponseLite.new(:message => optparse.to_s)
+      end
+      def self.version(impementing_object,interface,ability,request)
+
       end
     end
   end

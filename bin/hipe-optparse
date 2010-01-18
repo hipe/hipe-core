@@ -16,7 +16,10 @@ class OptparseExample
   include Hipe::Interfacey::Service
   interface.speaks :cli
 
-  interface.default_request = 'optparse-example', '--help'
+  # interface.default_request = 'optparse-example', '--help'
+  interface.default_request = 'help'
+
+  interface.responds_to('help',:aliases=>['-h','--help','-?'])
 
   interface.responds_to('optparse-example') do
 
@@ -75,7 +78,20 @@ class OptparseExample
     puts "beavis: #{beavis.inspect} butthead: #{butthead.inspect} "<<
     "optional bob: #{bob.inspect}"
     puts "your parsed opts: "<<opts.to_hash.inspect
-    ''
+    '' # return the empty string as a response b/c we output to stdout
+  end
+
+  interface.responds_to('other-command', 'i am a description', 'of the other command') do
+    opts.on('--opt','some option')
+    opts.on('-h',&help)
+    required('i_am_required','this is required')
+    optional('i_am_optional','an optional argument')
+  end
+  def other_command(first,second,opts)
+    out = Hipe::Interfacey::ResponseLite.new
+    out.puts "first: #{first.inspect} second: #{second.inspect} "
+    out.puts "your parsed opts: "<<opts.to_hash.inspect
+    out # return the result in a response object, should work same as above
   end
 end
 
