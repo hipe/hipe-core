@@ -129,9 +129,18 @@ module Hipe
       def desc= mixed
         raise ArgumentError.new("Won't clobber existing description") if
           (@desc && @desc.length > 0)
-        desc_array = mixed.kind_of?(Array) ? mixed :
-          mixed.gsub(/^ +/,'').split("\n")
-        self.desc.concat desc_array # we keep our original object
+        if mixed.kind_of? Array
+          desc = mixed
+        else
+          desc = mixed.gsub(/^ +/,'').split("\n")
+          # despite attempts at negative look-ahead above, we couldn't
+          # preserve intentional trailing newlines in the description guy
+          if desc.length > 0 && md = /(\n+$)/.match(mixed)
+            desc.last.concat(md[1])
+          end
+        end
+        self.desc.concat desc # we keep our original object
+        on_desc_change if respond_to? :on_desc_change        
         @desc
       end
 
@@ -449,14 +458,9 @@ module Hipe
         @parameters.merge_strict_recursivesque! definition.parameters
       end
 
-      def self.methodize name
-        name.to_s.gsub('-','_')
-      end
-
       def method_name
-        @method_name || Ability.methodize(name)
+        @method_name || Interfacey.methodize(name)
       end
-
     end
 
     class ParameterDefinition
@@ -761,9 +765,10 @@ module Hipe
       # Unlike OpenStruct, we clobber any existing method names. Careful!
       def attr_accessors(*names)
         names.each do |name|
+          method_name = Interfacey.methodize(name)
           meta = class << self; self; end
-          meta.send(:define_method, name) { self[name] }
-          meta.send(:define_method, :"#{name}=") { |x| self[name] = x }
+          meta.send(:define_method, method_name) { self[name] }
+          meta.send(:define_method, :"#{method_name}=") { |x| self[name] = x }
         end
       end
 
@@ -875,6 +880,9 @@ module Hipe
           end
         end
       end
+    end
+    def self.methodize name
+      name.to_s.gsub('-','_')
     end
   end
 end

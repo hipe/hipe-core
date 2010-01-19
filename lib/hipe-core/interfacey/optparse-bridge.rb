@@ -540,6 +540,9 @@ module Hipe::Interfacey
         # no special handling for no_style options
         @default = mixed
       end
+      def on_desc_change
+        @optparse_switch.instance_variable_set('@desc', @desc)
+      end
     end
 
     module ApplicationInstanceMethods
@@ -604,8 +607,13 @@ module Hipe::Interfacey
           attr_accessor :stack
           def last; @stack[2].instance_variable_get('@list').last end
         end
-        optparse.banner = "usage: #{optparse.program_name} <command> "<<
+        banners = []
+        if interface.desc.size > 0
+          banners.concat interface.desc
+        end
+        banners.push "usage: #{optparse.program_name} <command>"<<
         " [options]"
+        optparse.banner = banners * "\n"
         optparse.separator ' '
         optparse.separator 'available commands:'
         interface.abilities.each do |ability|
@@ -642,16 +650,23 @@ module Hipe::Interfacey
 
       def more_info_about_commands
         sps = []
+        
+        ability = @interface.ability_for_request('help', :cli)          
+        if ability
+          use_name = (ability.aliases && ability.aliases.size > 0) ? 
+            ability.aliases.first : ability.name          
+          sps << ("See '#{@app_instance.cli_application_name} "<<
+            "#{use_name}'.")
+          sps << "" # mvc whatever
+        end
+        
         names = all_visible_cli_abilities.map{|x| %{"#{x.name}"} }
         case names.size
           when 0: sps << "There are no avaible commands for this application."
           when 1: sps << "The one available command is %{name[0]}."
           else    sps << "Available commands are #{en.join(names)}."
         end
-        if @interface.responds_to? '--help', :cli
-          sps << ("Please see #{@app_instance.cli_application_name} "<<
-            "--help for more info.")
-        end
+
         sps
       end
 
@@ -660,21 +675,21 @@ module Hipe::Interfacey
         return sps unless @ability
         param = @ability.parameters.detect do |p|
           p.cli_type==:switch && p.long.include?('help')
-        end and sps << ("Please see #{@app_instance.cli_application_name} "<<
-            " #{@ability.name} #{param.name_as_switch} for more info.")
+        end and sps << ("See '#{@app_instance.cli_application_name}"<<
+            " #{@ability.name} #{param.name_as_switch}'.")
         sps
       end
 
       def on_cannot_respond_to
         sps = [%|Unrecognized command "#{@request.name}".|]
         sps.concat more_info_about_commands
-        ResponseLite.new(:error => sps * '  ')
+        ResponseLite.new(:error => sps * "\n")
       end
 
       def on_application_argument_error e
         sps = [e.to_s]
         sps.concat more_info_about_ability
-        ResponseLite.new(:error=>sps * '  ', :original_exception=>e)
+        ResponseLite.new(:error=>sps * "\n", :original_exception=>e)
       end
     end
   end
