@@ -25,19 +25,22 @@ module Hipe::Interfacey
 
   class Ability
     attr_accessor :cli_optparse_proxy
-    attr_reader :cli_aliases
+
     # factory constructor.
-    # note that with this form we can't pass blocks. kind of useless
+    # with this form we can't pass blocks. kind of useless
     # except for making it look pretty when testing
     def self.[](string)
       Ability.new(string,[:cli=>Cli])
     end
+
     def cli_parse_in_opts! opts
       if opts[:aliases]
-        @cli_aliases = opts.delete(:aliases)
+        @aliases ||= []
+        @aliases.concat opts.delete(:aliases)
       end
       nil
     end
+
     # throw on unparsable string
     def parse_in_first_string string
       struct = Cli::AbilityParse.new.parse string
@@ -45,10 +48,25 @@ module Hipe::Interfacey
       @parameters.merge_strict_recursivesque! struct.parameters
       nil
     end
+
+    def cli_merge_in! other
+      other_proxy = other.instance_variable_get('@cli_optparse_proxy')
+      if other_proxy
+        if @cli_optparse_proxy
+          return merge_fail("Can't merge two optparse proxies")
+        end
+        @cli_optparse_proxy = other_proxy
+        other.instance_variable_set('@cli_optparse_proxy', nil)
+      end
+      nil
+    end
   end
 
   class AbilityDefinitionContext
     # instance methods defined here are available in the definition blocks
+    # Note that this namespace is shared among all paradigms, so know what
+    # you are doing before you add a new method here.
+
     attr_reader :optparse_proxy
     def cli_before_ability_definition
       opt_parser = OptionParser.new
@@ -56,15 +74,8 @@ module Hipe::Interfacey
     end
     def opts;  @optparse_proxy  end
     def cli_after_ability_definition ability_definition
-      accessors = []
-      parameters.each do |param|
-        next unless :switch == param.cli_type
-        accessors << param.name if
-          Hipe::Interfacey.valid_method_name?(param.name)
-      end
       if @optparse_proxy.num_things > 0
         ability_definition.cli_optparse_proxy = @optparse_proxy
-        @optparse_proxy.parse_context.result.attr_accessors(*accessors)
       end
     end
     def help
@@ -117,10 +128,25 @@ module Hipe::Interfacey
       end
     end
   end
+
   module Cli
+    # This is a "paradigm module."  The system will look for paradigm-specific
+    # implementations here, in the form of specific classes, modules, methods.
+    # like:
+    #   * init_service_class()
+    #   * DefaultImplementations
+    #   * ResponseContext
+    #
+    # Also, paradigm-private implementation classes go here.  This is for
+    # example why we see Interfacey::Cli::SwitchParameter, but
+    # Interfacey::RequiredParameter as opposed to
+    # Interfacey::Cli::RequiredParameter;
+    # because the former is a type of parameter specific to cli, but the
+    # latter is a type of parameter common to all inerfaces and paradigms.
+
 
     def self.init_service_class implementor
-      implementor.send :include, Run
+      implementor.send :include, ApplicationInstanceMethods
     end
 
     # if the syntax summary line (matching "usage:..") is longer than any
@@ -131,16 +157,16 @@ module Hipe::Interfacey
     def self.add_linebreaks_to_syntax_summary! banner
       indent = ' '*4 # hardcoded in optparse too :/
       lines = banner.split("\n")
-      idx = lines.index{|x| x=~ /^ *usage:/}
-      return unless idx
+      idx = lines.index{|x| x=~ /^ *usage:/} or return
       summary_line = lines[idx]
       lines_before_summary = lines.slice(0,idx)
-      lines_after_summary = lines.slice(idx+1, lines.length)
-      return unless lines_after_summary
+      lines_after_summary = lines.slice(idx+1, lines.length) or return
       lines_wo_summary = lines_before_summary + lines_after_summary
       max_width = lines_wo_summary.map{|x| x.length}.max
       max_width = [40, max_width].max  # let's not be ridiculous
       return if summary_line.length <= max_width
+      # we do a similar operation twice because the first line is
+      # handled different than the rest.
       re =/^
         (.{1,#{max_width-1}}\]|.{1,#{max_width-2}}>(?!\]))
         [[:space:]]*
@@ -162,10 +188,9 @@ module Hipe::Interfacey
       ].flatten * "\n"
       nil
     end
-    class RequestParse
-      include Lingual::En
 
-      # this manages the parsing of an individual request, running the opts
+    class RequestParse
+      # manages the parsing of an individual request, running the opts
       # thru optparse, complaining if required parameters don't exist,
       # and complaining about anything that it can't parse on the
       # input array once it gets to the end of its grammar
@@ -173,6 +198,8 @@ module Hipe::Interfacey
       # @return [RequestLite] the provided request,
       # eat off the unparsed_parameters and create an array at
       # parsed_parameters
+
+      include Lingual::En
       @@singleton = new
       def self.parse_request! ability, request
         @@singleton.parse_request! ability, request
@@ -185,7 +212,7 @@ module Hipe::Interfacey
         ability.parameters.each do |param|
           @by_type[param.cli_type] << param
         end
-        switches = parse_off_switches ability.cli_optparse_proxy, request
+        switches = parse_off_switches ability, request
         argv = [
           parse_off_requireds(request),
           parse_off_optionals(request)
@@ -201,7 +228,8 @@ module Hipe::Interfacey
       end
 
       # @return [AssociativeArray|nil] nil if there are no defined switches
-      def parse_off_switches proxy, request
+      def parse_off_switches ability, request
+        proxy = ability.cli_optparse_proxy
         return nil unless @by_type.has_key?(:switch)
         # remember there is only ever one optparser in memory per ability
         proxy.parse_context.result.clear
@@ -211,9 +239,10 @@ module Hipe::Interfacey
         rescue OptionParser::ParseError => e
           raise Cli::OptparseParseError.new(e)
         end
-        parse_result = proxy.parse_context.result.dup # multiple invocations?
+        opts = proxy.parse_context.result.dup # multiple invocations?
         proxy.parse_context.result.clear # just to be safe we do it twice
-        parse_result
+        opts.attr_accessors(*@by_type[:switch].map{|x| x.name})
+        opts
       end
 
       # @return an argv-like array of key-value pairs for all the switches
@@ -265,20 +294,32 @@ module Hipe::Interfacey
         @original_exception = original_exception
       end
     end
+
     class OptionParsingExecutionContext
+      # defines the set of all methods available from within
+      # the blocks that define switch parameters.  Currently all this
+      # provides is "result", so the user can put custom-values
+      # into the result structure.
+
       attr_reader :result
       def initialize proxy
         @proxy = proxy
         @result = AssociativeArray.new.no_clobber.require_key
+        @result.clobber_message = "Can only specify %s once"
+          # @todo i18n alla merb
       end
       def clear
         @result.clear
       end
     end
+
     class OptionParserProxy
-      # this thing allows users to say opts.on(...) in their definitions
-      # and still we can route the defined options into our definition
-      # structure
+      # From within ability definition blocks, the user uses "opts"
+      # to talk to an object of this class.  It's a wrapper around
+      # (and proxy to) a subset of the interface of OptionParser,
+      # which routes messages to there while also adding to our own
+      # internal definition structure.
+
       attr_reader :option_parser, :parse_context, :num_things
       attr_accessor :result
       def initialize option_parser, ability_definition
@@ -300,10 +341,14 @@ module Hipe::Interfacey
       def to_s
         @option_parser.to_s
       end
+
+      # @return [SwitchParameter] the parameter created or re-opened.
+      # note this differs from OptionParser#on, which returns the parser.
       def on *args, &user_block
         @num_things += 1
         my_opts = args.last.kind_of?(Hash) ? args.pop : nil
-        orig_result = @option_parser.on(*args)  # we don't give it a block yet
+        @option_parser.on(*args)
+        # above result is the option parser. we throw it away.
         switch = @list_hack.last  # the switch just added above
         my_switch = ParameterDefinition.from_optparse_switch switch, my_opts
         # if the user didn't provide a block in the definition, the default ..
@@ -311,10 +356,10 @@ module Hipe::Interfacey
         if my_switch.many?
           use_this_block = lambda do |value|
             value = @parse_context.instance_exec(value, &user_block)
-            unless result.has_key?(my_switch.name)
+            unless  @parse_context.result.has_key?(my_switch.name)
               @parse_context.result[my_switch.name] = []
             end
-            @parse_context.result[my_switch.name] = []
+            @parse_context.result[my_switch.name] << value
           end
         else
           use_this_block = lambda do |value|
@@ -324,14 +369,16 @@ module Hipe::Interfacey
         end
         switch.instance_variable_set('@block', use_this_block)
         @defined_parameters[my_switch.name] = my_switch # throws on clobber
-        orig_result
+        my_switch
       end
       def on_tail *args, &block
         @num_things += 1
         @option_parser.on_tail(*args, &block)
       end
     end
+
     class AbilityParseTree < Struct.new(:name, :parameters); end
+
     class AbilityParse
       # we may end up never using this but it is nifty.
       # Build an ability definition from a syntax summary string
@@ -397,6 +444,7 @@ module Hipe::Interfacey
         throw :end_of_string if ""==string
       end
     end
+
     module SwitchParameter
       include Defaultable
       ShortRe   = /^-(.+)$/
@@ -494,42 +542,62 @@ module Hipe::Interfacey
       end
     end
 
-    module Run
-      # this gets mixed in to the implementor to give it cli_run
+    module ApplicationInstanceMethods
+      # this gets mixed in to the implementor to give it cli_run()
+      # @todo don't change default object -- maybe dup it?
       def cli_run argv
-        # @todo currently no support for object-level inteface objects
-        interface = self.class.interface
+        interface = self.cli_interface
+        context = interface.create_response_context(self, :cli)
         request = RequestLite.new argv
         request = interface.default_request if request.empty?
-        return ResponseLite.new(:error=>"empty request")  if request.empty?
-        # @todo don't change default object -- maybe dup it?
+        context.request = request
+        return context.on_empty_request if request.empty?
         request.unparsed_parameters = [] if (request.unparsed_parameters.nil?)
-        name = request.name
-        ability = interface.abilities.detect{|x| x.name == name} or
-          return ResponseLite.new(:error=>
-            %{don't know how to respond to "#{request.name}"})
+        ability = interface.ability_for_request(request, :cli) or
+          return context.on_cannot_respond_to
+        context.ability = ability
         method_name = ability.method_name
-        return interface.on_method_missing(self, ability, request) unless
-          respond_to? method_name
+        return context.on_method_missing unless respond_to? method_name
         begin
           early_exit = catch(:cli_early_exit) do
             Cli::RequestParse.parse_request! ability, request
           end and return early_exit
         rescue ApplicationArgumentError => e
-          return ResponseLite.new(:error=>e.to_s, :original_exception=>e)
+          return context.on_application_argument_error(e)
         end
         args = request.parsed_parameters
         arity = self.method(method_name).arity
-        raise ArgumentError.new("expecting #{self.class}##{method} "<<
-          "to take #{args.size} arguments per the definition.  "<<
-          "Its arity is #{arity}.") if
-          ( (arity > 0 && arity != args.length) ||
-            (arity < 0 && arity.abs < (args.length - 1) ) )
+        if ( (arity > 0 && arity != args.length) ||
+           (arity < 0 && arity.abs < (args.length - 1) ) )
+          return context.on_arity_mismatch arity, args.size
+        end
         send(method_name, *args)
       end
+
+      # @todo currently no support for object-level inteface objects.
+      # the implementing class should probably redefine this once we
+      # create a dup() or clone() method for interfaces, if it needs
+      # object-specific interfaces.
+      # This is and always will be an Interface object, but we follow the
+      # contract of only ever adding method names prepended with the
+      # paradigm name.
+      def cli_interface
+        self.class.interface
+      end
+
+      def cli_application_name
+        # we could try to reach out to optparse program name but
+        # too much hassle
+        @cli_application_name ||= File.basename($0, '.*')
+      end
     end
+
     module DefaultImplementations
-      def self.help(impementing_object,interface,ability,request)
+      # it's code smell to provide a lot of out of the box pre-wrapped
+      # application-level functionality, but "help" is one of the
+      # more compelling reasons to use this whole thing at all.
+
+      def self.help(interface,impementing_object,ability,request)
         # flagrant hack again
         optparse = OptionParser.new
         class << optparse;
@@ -547,8 +615,66 @@ module Hipe::Interfacey
         end
         ResponseLite.new(:message => optparse.to_s)
       end
-      def self.version(impementing_object,interface,ability,request)
 
+      def self.version(impementing_object,interface,ability,request)
+        "one day we might look for Version or VERSION in the implementor."
+      end
+    end
+
+    class ResponseContext < Hipe::Interfacey::ResponseContext
+      include Lingual::En
+
+      # add cli-specific information to application-level error messages.
+
+      def on_empty_request
+        response = super
+        sps = more_info_about_commands
+        if sps.size > 0
+          Lingual::En.puncutate!(response.errors.last)
+          response.errors.last << ('  ' + sps * '  ')
+        end
+        response
+      end
+
+      def all_visible_cli_abilities
+        @interface.abilities(:visible=>true,:paradigm=>:cli)
+      end
+
+      def more_info_about_commands
+        sps = []
+        names = all_visible_cli_abilities.map{|x| %{"#{x.name}"} }
+        case names.size
+          when 0: sps << "There are no avaible commands for this application."
+          when 1: sps << "The one available command is %{name[0]}."
+          else    sps << "Available commands are #{en.join(names)}."
+        end
+        if @interface.responds_to? '--help', :cli
+          sps << ("Please see #{@app_instance.cli_application_name} "<<
+            "--help for more info.")
+        end
+        sps
+      end
+
+      def more_info_about_ability
+        sps = []
+        return sps unless @ability
+        param = @ability.parameters.detect do |p|
+          p.cli_type==:switch && p.long.include?('help')
+        end and sps << ("Please see #{@app_instance.cli_application_name} "<<
+            " #{@ability.name} #{param.name_as_switch} for more info.")
+        sps
+      end
+
+      def on_cannot_respond_to
+        sps = [%|Unrecognized command "#{@request.name}".|]
+        sps.concat more_info_about_commands
+        ResponseLite.new(:error => sps * '  ')
+      end
+
+      def on_application_argument_error e
+        sps = [e.to_s]
+        sps.concat more_info_about_ability
+        ResponseLite.new(:error=>sps * '  ', :original_exception=>e)
       end
     end
   end

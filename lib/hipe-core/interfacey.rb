@@ -6,11 +6,13 @@
 #
 # A set of Abilities defines the set of requests (Requests?) that the
 # implementing class can respond_to through its Interface.
-# (We are using "set" and "list" here on purpose;) )
+# (We are using "set" and "list" here sort of on purpose.)
 #
 # An Ability has a name (string not symbol), and a set (list?) of zero
 # or more ParameterDefinition s. (Not called "Parameters" to avoid confusion
 # with the parameters of an individual request.)
+#
+# An Abilty can have zero or more aliases, also strings.
 #
 # Each Ability will usually (always?) correspond to an instance method in the
 # implementing class. (We considered calling this "Command" instead of
@@ -80,12 +82,22 @@
 require 'ruby-debug'
 
 module Hipe
+
   module Interfacey
+
+    # all exceptions thrown by Interfacey will be a kind_of? this
     module Exception; end
+
     class ArgumentError < ::ArgumentError; include Exception end
+
     class RuntimeError < ::RuntimeError; include Exception end
+
     class ApplicationArgumentError < ArgumentError; end
-    class Paradigm < Struct.new(:module); end
+
+    class Paradigm < Struct.new(:name,:module); end
+
+    # this defines the set of all class methods given to a class
+    # that is a kind of Intefacey::Service
     module Service
       def self.included mod
         class << mod
@@ -94,14 +106,78 @@ module Hipe
         mod.interface = Interface.new(mod)
       end
     end
+
+    module Describable
+      # the same rules apply to interfaces, abilities, and their parameters
+      # for setting and getting their description strings.
+
+      # The name "desc" is borrowed from optparse, and is thus abbreviated
+      # only for historical reasons.   For this same reason the description
+      # is represented internally as an array of strings, which shouldn't
+      # be a problem because while converting an array of strings to a string
+      # is lossy, the reverse is not.
+
+
+      # @param [String|Array] if String, will be run through the
+      # common gsub/split routine.  If needed we can provide a way to
+      # circumvent this.
+      #
+      # For now, this is non-clobbering, and will raise an ArgumentError
+      # if there is any existing description.  Existing descriptions can be
+      # cleared with thing.desc.clear.  If you want to for some reason merge
+      # in to any existing description, you could thing.desc.concat(array)
+      def desc= mixed
+        raise ArgumentError.new("Won't clobber existing description") if
+          (@desc && @desc.length > 0)
+        desc_array = mixed.kind_of?(Array) ? mixed :
+          mixed.gsub(/^ +/,'').split("\n")
+        self.desc.concat desc_array # we keep our original object
+        @desc
+      end
+
+      # @oldschool setter getter
+      def desc mixed=nil
+        if mixed.nil?
+          @desc ||= []
+        else
+          self.desc = mixed
+        end
+      end
+
+      alias_method :describe, :desc
+    end
+
+    # "hideable" ? neither of these are "words"
+    module Visable
+      attr_accessor :visible
+      alias_method :visible?, :visible
+      def hidden
+        ! @visible
+      end
+      def hidden= val
+        @visible = ! val
+      end
+      alias_method :hidden?, :hidden
+      def show
+        @visible = true
+      end
+      def hide
+        @visible = false
+      end
+    end
+
     class Interface
-      attr_reader :abilities, :can_speak, :default_request
+      include Describable
+      attr_reader :default_request
+
       def initialize implementor
+        @desc = nil
         @default_request = nil
         @abilities = AssociativeArray.new.no_clobber.require_key
         @implementor_class = implementor
         @speaks = AssociativeArray.new.no_clobber.require_key
       end
+
       # @oldschool-setter-getter
       def speaks paradigm_name=nil
         return @speaks.keys.dup if paradigm_name.nil?
@@ -109,7 +185,7 @@ module Hipe
         when :cli
           if ! @speaks.has_key?(:cli)
             require 'hipe-core/interfacey/optparse-bridge'
-            para = Paradigm.new(Cli)
+            para = Paradigm.new(:cli, Cli)
             @speaks[:cli] = para
             para.module.init_service_class @implementor_class
           end
@@ -117,47 +193,125 @@ module Hipe
           raise ArgumentError.new("can't speak #{paradigm_name.inspect}")
         end
       end
+
       def _speaks
         @speaks
       end
-      def can_speak? paradigm
+
+      def speaks? paradigm
         @speaks.has_key? paradigm
       end
+
       def responds_to *args, &proc
-        ability = Ability.new(args, @speaks, &proc)
-        @abilities[ability.name] = ability
+        Ability.create_or_merge(@abilities, args, @speaks, &proc)
       end
+
+      def responds_to? mixed, paradigm=nil
+        self.abilities(:paradigm=>paradigm, :request=>mixed).size > 0
+      end
+
+      # @return nil if no abilities found, ability if one found,
+      # raise ArgumentError if more than one ability matched
+      def ability_for_request mixed, paradigm
+        abilities = self.abilities(
+          :paradigm => paradigm, :visible => true, :request => mixed
+        )
+        case abilities.size
+          when 0: nil
+          when 1: abilities[0]
+          else raise ArgumentError(
+            %|ambiguous inteface grammar -- |<<
+            %|more than one ability for %{name}|
+          ) # this might never happen depending on how we
+          # implement aliases.
+        end
+      end
+
+
+      # @return [Array] of matched abilities given
+      # @param [Hash] a query of the form:
+      #   [:paradigm => Symbol], [:visible => Boolean], [:request=> mixed]
       #
+      # :request must either be a String or respond_to?(:name)
+      #
+      def abilities query={}
+        visible    = query[:visible]
+        paradigm   = query[:paradigm]
+        name       = query[:request] ?
+          (query[:request].kind_of?(String) ?
+            query[:request] : query[:request].name
+          ) : nil
+
+        # we could speed this up by using the assoc. array key but why?
+        @abilities.select do |ability|
+          (visible.nil? ? true :
+            (ability.visible? == visible)
+          ) &&
+          (paradigm.nil? ? true :
+            ability.speaks?(paradigm)
+          ) &&
+          (name.nil? ? true :
+            (ability.name == name ? true :
+              (ability.aliases ?
+                ability.aliases.include?(name) :
+                false
+              )
+            )
+          )
+        end
+      end
+
       # note that caller can set a request name and parameters:
       # interface.default_request = 'foo', {'bar'=>'baz'}
-      def default_request=(args)
-        @default_request = RequestLite.new(args)
+      def default_request= args
+        @default_request = RequestLite.new args
       end
-      def default_request
-        @default_request || RequestLite.new(nil)
-      end
-      def on_method_missing(impementing_object, ability, request)
-        @speaks.each do |paradigm|
-          defaults = paradigm.module.const_get('DefaultImplementations')
-          if defaults.respond_to?(ability.method_name)
-            return defaults.send(
-              ability.method_name,
-              impementing_object,
-              self,
-              ability,
-              request
-            )
-          end
+
+      # @oldschool setter-getter
+      def default_request args=nil
+        if args
+          self.default_request = args
+        else
+          @default_request || RequestLite.new(nil)
         end
-        raise ArgumentError.new("please implement #{ability.method_name}")
+      end
+
+      def might &block
+        instance_eval(&block)
+      end
+
+      def create_response_context app_instance, speaks
+        context_class = @speaks[speaks].module.const_get('ResponseContext')
+        # looking for ResponseContext.new() ?
+        context_class.new speaks, self, app_instance
       end
     end
+
     class Ability
+      include Describable, Visable
       NameRe = %r|^([[:space:]]*[a-z][-a-z0-9_]+[[:space:]]*)(.*)$|
-      attr_accessor :method_name
-      attr_reader :name, :parameters, :speaks, :desc
+      attr_reader :name, :parameters, :speaks, :aliases
+      # aliases is defind above but not supported out of the box @todo
+
+      # @param [AssociativeArray] existing_assoc existing abilities
+      #   keyed by name
+      # @see initialize() for the remaining parameters
+
+      def self.create_or_merge(existing_assoc, args, speaks, &proc)
+        new_ability = new(args, speaks, &proc)
+        if ability = existing_assoc[new_ability.name]
+          ability.merge_in! new_ability
+          result = ability
+        else
+          result = new_ability
+          existing_assoc[new_ability.name] = new_ability
+        end
+        result
+      end
+
       def initialize(args, speaks=nil, &proc)
         args = [args] if String===args
+        @visible = true
         @speaks = speaks
         @parameters = AssociativeArray.new.no_clobber.require_key
         opts = args.last.kind_of?(Hash) ? args.pop : nil
@@ -170,27 +324,117 @@ module Hipe
             method = "#{speaks}_parse_in_opts!"
             send(method, opts) if respond_to? method
           end
+          parse_in_opts! opts
           raise ArgumentError.new(
-            "Unexpected opt(s):",opts.keys.map{|x| x.to_s} * ', '
+            "unhandled opt(s):" + opts.keys.map{|x| x.to_s} * ', '
           ) if opts.size > 0
         end
         merge_in_definition(&proc) if proc
       end
+
+      def speaks? paradigm_name
+        @speaks && @speaks.has_key?(paradigm_name)
+      end
+
+      def merge_fail(msg)
+        raise ArgumentError.new("merge failure: #{msg}")
+      end
+
+
+      # for when abilties have been "re-opened", (for dealing with having long
+      # descriptions of paramters happening in their own statements.)
+      # This might also be useful if an appication object wants to add
+      # parameter definitions to an existing ability ''dynamically''.
+      # In theory it could also be relevant if we ever deal with (ick)
+      # interface ''inheiritance''.
+      # This will attempt to render the passed ability useless and empty,
+      # and raise a failure when there are instance_variables we have
+      # forgotten about.
+      #
+      def merge_in! other
+        return merge_fail(%|can't merge-in an ability with a different |<<
+        %|name (mine: "#{name}", other: "#{other.name}")|) unless
+          other.name == name
+
+        # totally insane.  The new defined ability must know about
+        # previous paradigms the existing ability speaks.
+        missing = speaks.keys - other.speaks.keys
+        newkeys = other.speaks.keys - speaks.keys
+        if missing.size > 0
+          return merge_fail(%|for now, the new definition must | <<
+          %|speak a superset of what the old definition spoke (missing:| <<
+          %| #{missing.keys.map{|x| x.to_s}*', '})|)
+        end
+
+        @visible = other.instance_variable_get('@visible')
+        other.instance_variable_set('@visible',nil)
+
+        newkeys.each do |key|
+          @speaks[key] = other.speaks[key]
+        end
+
+        # @todo why are these the same object? should they be?
+        if speaks.object_id == other.speaks.object_id
+          other.instance_variable_set('@speaks',nil)
+        else
+          other.speaks.clear
+        end
+
+        # @todo the below is a bit expensive with delete turned on!
+        @parameters.merge_strict_recursivesque!(other.parameters,:delete=>1)
+
+        if (other.desc.size > 0)
+          self.desc = other.desc   # raises on clobber
+          other.desc.clear
+        end
+
+        other.instance_variable_set('@name',"")
+
+        # i can't wrap my head around whether we want the new longer list here
+        speaks.keys.each do |key|
+          self.send(%{#{key.to_s}_merge_in!},other)
+        end
+
+        not_empty = []
+        other.instance_variables.each do |name|
+          var = other.instance_variable_get(name)
+          if ( !var.nil? and ! var.respond_to?(:empty?) || ! var.empty? )
+            not_empty.push [name, var]
+          end
+        end
+
+        if not_empty.size > 0
+          msg = not_empty.map{|pair| %|#{pair[0]} : #{pair[1].class}| }*', '
+          return merge_fail("not empty in source after merge: "+msg)
+        end
+
+        nil
+      end
+
       # this gets superceded by cli
       def parse_in_first_string string
         (md = NameRe.match(string) and md[2] == "") or
           raise ArgumentError.new("bad name: #{string.inspect}")
         @name = md[1].strip
       end
+
       def parse_in_args args
         raise ArgumentError.new("expecting description array") if
           args.detect{|x| !String===x}
         @desc = args
       end
+
+      def parse_in_opts! opts
+        if opts[:desc]
+          self.desc = opts.delete(:desc)
+        end
+      end
+
       def name=(name)
         raise ArgumentError.new("names can only be set once") if @name
         @name = name
       end
+
       def merge_in_definition &block
         definition = AbilityDefinitionContext.new self
         @speaks.keys.each do |speak|
@@ -204,15 +448,20 @@ module Hipe
         end
         @parameters.merge_strict_recursivesque! definition.parameters
       end
+
       def self.methodize name
         name.to_s.gsub('-','_')
       end
+
       def method_name
         @method_name || Ability.methodize(name)
       end
+
     end
+
     class ParameterDefinition
-      attr_reader :required, :desc, :name
+      include Describable # one day Visable
+      attr_reader :required, :name
       alias_method :required?, :required
       def subset? other
         name == other.name && required? == other.required?
@@ -249,15 +498,18 @@ module Hipe
         @desc = args
       end
     end
+
     module Defaultable
       attr_accessor :default
       def default_defined?
         instance_variable_defined? '@default'
       end
     end
+
     module OptionalParameter
       include Defaultable
     end
+
     module RequiredParameter
     end
 
@@ -352,30 +604,109 @@ module Hipe
       end
     end
 
-    # OrderedHash can be annoying.  This achieves what we want in 10% sloc.
-    # additional features: no_clobber, merge_strict_recursivesque!,
-    # require_key (meaning non Fixnum, non nil key), attr_accessors
-    # (sort of open struct-like)
+    class ResponseContext
+      # a ResponseContext is a way to corral all the error handling
+      # for pre-processing a request (determining method name, etc)
+      # in one place, and allow variations to them among the paradigms.
+      # it started because cli_run started to get too long and we wanted
+      # to break it up, and it felt weird adding all these to the application
+      # or the interface. one day we will deal with how to give hooks to the
+      # implememtor, it will probably of the form:
+      # "on_<paradigm>_<error-name>(...)", like if the implementor defines
+      # on_cli_method_missing(...) that will be used instead.
+
+      attr_accessor :request, :ability
+
+      def initialize paradigm_name, interface, app_instance
+        @paradigm_name = paradigm_name
+        @interface = interface
+        @app_instance = app_instance
+        @ability = nil
+        @request = RequestLite.new(nil)
+          # just in case it isn't set before we need it @todo necessary?
+      end
+
+      def paradigm
+        @interface._speaks[@paradigm_name]
+      end
+
+      # this happens only when there is no default request or the default
+      # request is also empty (empty meaning no name and no parameters)
+      # this must return a response with one error message.  paradigms
+      # can change this but they might call up to this.
+      def on_empty_request
+        ResponseLite.new(:error=>"empty request")
+      end
+
+      # can't find an ability to match the request name
+      def on_cannot_respond_to
+        ResponseLite.new(
+          :error=>%{i don't know how to respond to "#{@request.name}"})
+      end
+
+      # ApplicationArgumentError is a class created for us to throw
+      # inteface-level interaction errors, like handling unexpected parameters
+      # or missing required parameters. This is called to handle when
+      # exceptions of those class are thrown.  Whether or not to present the
+      # error to the user is something that the paradigm or implementing class
+      # should define. Cli, for example, will probably want to display to the
+      # user something like "please see <command-name> -h for more
+      # information.", but in a rack context this might be something to
+      # log to an error file.
+      def on_application_argument_error e
+        ResponseLite.new(:error=>e.to_s, :original_exception=>e)
+      end
+
+      # the implementing object doesn't respond to a method name corresponding
+      # to the ability name, but the ability has been defined.
+      def on_method_missing
+        defaults = paradigm.module.const_get('DefaultImplementations')
+        if defaults.respond_to? @ability.method_name
+          return defaults.send( @ability.method_name,
+            @interface, @app_instance, @ability, @request)
+        end
+        raise ArgumentError.new("please implement #{@ability.method_name}")
+      end
+
+      # similar to above.
+      def on_arity_mismatch method_arity, args_size
+        raise ArgumentError.new(
+          "expecting #{@app_instance.class}##{method} to take to take "<<
+          "#{args.size} arguments per the definition.  Its arity is "<<
+          " #{arity}.")
+      end
+    end
+
+    # OrderedHash can be annoying.  This achieves what we want with less sloc.
+    # additional features: no_clobber, custom messages on clobber,
+    # require_key (meaning non Fixnum, non nil key),
+    # merge_strict_recursivesque!,  attr_accessors (sort of open struct-like)
     # @todo - move this to hipe-core/struct/ if you want to use it elsewhere
     # but why should you? you will always want to use Interfacey too!
     class AssociativeArray < Array
       # when we eventually need any methods from the below list we will have
       # to deal with @keys and @keys_order.  Trivial but crufty until needed.
-      undef :delete, :delete_at, :pop, :reject!, :replace, :shift, :slice!,
+      undef :pop, :reject!, :replace, :shift, :slice!,
         :sort, :sort!
+
+      alias_method :orig_delete_at, :delete_at
+      undef :delete_at # ! terrible
+
       def initialize
         super
         @require_key = false
         @clobber = true
+        @clobber_message = nil
         @keys = {}
         @keys_order = []
       end
       alias_method :orig_store, :[]=
       alias_method :orig_fetch, :[]
+      attr_accessor :clobber_message
       def []=(key, thing)
         if (!@clobber && (key.class==Fixnum) ?
           (i < length) : @keys.has_key?(key))
-          raise @clobber_exception_class.new("Won't clobber #{key.inspect}")
+          raise @clobber_exception_class.new(sprintf(clobber_message,key))
         end
         if (@require_key and !key || key.kind_of?(Fixnum))
           raise ArgumentError.new("This array required a non-numeric "<<
@@ -388,21 +719,43 @@ module Hipe
         @keys[key] = index
       end
       def [](key)
-        orig_fetch(key) if key.class == Fixnum
-        orig_fetch @keys[key]
+        (key.class==Fixnum) ? orig_fetch(key) :
+        has_key?(key) ? orig_fetch(@keys[key]) : nil
       end
       def clear
         super
         @keys_order.clear
         @keys_clear
       end
+
+      # in the future we might expand this to take indexes
+      # note this redefines parent to not take a block.
+      def delete key
+        if @keys[key]
+          key_idx = @keys.delete(key)
+          @keys.select do |k,v|
+            v > key_idx
+          end.each do |k,v|
+            @keys[k] -= 1
+          end
+          @keys_order.delete_at @keys_order.index(key)
+          orig_delete_at key_idx
+        else
+          nil
+        end
+      end
+
       def keys;          @keys_order.dup             end
-      def has_key? key;  !! @keys[key]               end
-      def require_key;  @require_key = false; self end
+      def has_key? key;  @keys.has_key?(key)         end
+      def require_key;   @require_key = true; self   end
       def no_clobber(throw_class=nil)
         @clobber = false;
         @clobber_exception_class = throw_class || ApplicationArgumentError
         self
+      end
+
+      def clobber_message
+        @clobber_message ||= "Won't clobber %s"
       end
 
       # Unlike OpenStruct, we clobber any existing method names. Careful!
@@ -427,6 +780,17 @@ module Hipe
         hash
       end
 
+      def dup
+        nu = super
+        %w(@keys @keys_order).each do |it|
+          nu.instance_variable_set it, instance_variable_get(it).dup
+        end
+        %w(@require_key @clobber).each do |it|
+          nu.instance_variable_set it, instance_variable_get(it)
+        end
+        nu
+      end
+
       # very experimental!  requires that other array have keys
       # for each of its elements. (We could change this if we made)
       # this class more set-like, that is, require hash() and eql?()
@@ -434,20 +798,21 @@ module Hipe
       # This tries to append each other element in its foreign order
       # to the end of this array, using its key; if we don't have the key.
       # If this array already has the key, this will either replace
-      # or ignore the other value based on which one is a subset of the other.
-      # (the one that is a subset wins, it has more information.)
+      # or ignore the other value based on which value is a subset() of the
+      # other.  (the one that is a subset wins, it has more information.)
       # An ArgumentError is raised if neither value is a subset of the other.
       # The really cool thing to do would be define and use set union.
       # it is called "recursivesque" because it only goes down this one level
       # (for now)
-      def merge_strict_recursivesque! assoc_array
-        other_keys = assoc_array.keys
-        if (other_keys.length != assoc_array.length)
+      def merge_strict_recursivesque! other, opts={}
+        do_delete = opts.has_key?(:delete) ? opts[:delete] : false
+        other_keys = other.keys
+        if (other_keys.length != other.length)
           raise ArgumentError.new(
             "for now, other array must be %100 hash-like")
         end
         other_keys.each do |key|
-          other_value = assoc_array[key]
+          other_value = do_delete ? other.delete(key) : other[key]
           if ! has_key? key
             self[key] = other_value
           elsif self[key].subset? other_value
@@ -461,18 +826,40 @@ module Hipe
         end
       end
     end
+
     module Lingual
       # we didn't wan't a dependency on en.rb just for this,
-      # and this revisits the interface
+      # and this revisits the interface.  It will probably move
+      # into an "nl" submodule.
+
       module En
+        SpTerminationPunctuation      = /[\.?!]/
+        PhraseTerminationPunctuation  = /[;,]/
+
         # experimental -- would be better to have one object per object?
         def self.included mod
           speaker = Speakers::En.new
           mod.send(:define_method, :en){ speaker }
         end
+
+        def self.is_sentence_terminating_punctuation? fixnum
+          SpTerminationPunctuation =~ fixnum.chr
+        end
+
+        def self.punctuate! string
+          if (
+            string.length > 0 &&
+            ! is_sentence_terminating_punctuation?(string[string.length-1])
+          )
+            string.concat '.'
+          end
+        end
       end
+
       module Speakers
+
         class Speaker; end
+
         class En < Speaker
           # oxford comma
           def join(list, sep1=', ', sep2=' and ', &block)
@@ -488,10 +875,6 @@ module Hipe
           end
         end
       end
-    end
-    ValidMethodNameRe = /^[_a-z][_a-z0-9]*/i
-    def self.valid_method_name? str
-      ValidMethodNameRe =~ str
     end
   end
 end
