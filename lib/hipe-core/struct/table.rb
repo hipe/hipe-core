@@ -8,21 +8,33 @@ require 'hipe-core/struct/hash-like-write-once-extension'
 require 'hipe-core/lingual/en'
 require 'orderedhash'
 
+# @todo - reduce these dependencies on externals if we can.
+# they are all pretty light, but it's kind of ridiculous
+
 module Hipe
   class Table
 
+    #
     # Hipe::Table is an abstract representation of a table intended to allow:
     #  - dynamic addition and removal of rows and columns
-    #    - at runtime you may not want to show certain columns based on some criteria
-    #  - a representation of the data abstract enough so that it can be used in different view contexts, e.g.
-    #    - to render ascii output to a terminal
-    #    - to render html, xml, csv, json, yaml, etc
+    #    - at runtime you may not want to show certain columns
+    #        based on some criteria
+    #  - a representation of the data abstract enough so that it can use the
+    #      same underlying data structure to render views in different
+    #      contexts, e.g.:
+    #        - to render ascii output to a terminal
+    #        - to render html, xml, csv, json, yaml, etc
+    #  - with the out-of-the-box ascii rendering, it will justify cels
     #
-    #  (the reason we made a class for it was because we kept changing the implementation in GoldenHammer --
-    #  Not sure what combination of Set, SortedSet, OrderedHash (molic), AS3 OrderedHash, OpenStruct or Mash
-    #  we will eventually use, so we needed to insulate the implementation from some kind of spec for this.)
+    #  (the reason we made a class for it was because we kept changing the
+    #  implementation in GoldenHammer -- Not sure what combination of Set,
+    #  SortedSet, OrderedHash (molic), AS3 OrderedHash, OpenStruct or Mash
+    #  we will eventually use, so we needed to insulate the implementation
+    #  from some kind of spec for this.)
     #
-    #  Despite MVC wisdom, Hipe::Table will provide a default renderer for :ascii contexts
+    #  Despite MVC wisdom, Hipe::Table will provide a default renderer for
+    # :ascii contexts
+    #
 
 
     extend Loquacious::AttrAccessor
@@ -46,7 +58,6 @@ module Hipe
 
     public
     attr_accessor :fields
-    attr_reader :list
     block_accessor :labelize
     boolean_accessor :visible
     boolean_accessor :show_header, :nil => true
@@ -62,8 +73,13 @@ module Hipe
       t
     end
 
-    def label
-      @label || @name
+    # @oldschool setter-getter
+    def label(mixed=nil)
+      if mixed.nil?
+        @label || @name
+      else
+        self.label = mixed
+      end
     end
 
     def visible_fields
@@ -96,12 +112,16 @@ module Hipe
       if block
         f = Field.new(self,*args,&block)
         if @fields_by_name[f.name]
-          raise ArgumentError.new("For now, can't redefine fields: #{f.name.inspect}")
+          raise ArgumentError.new(
+           "For now, can't redefine fields: #{f.name.inspect}")
         end
         @fields << f
         @fields_by_name[f.name] = f
       else
-        raise ArgumentError.new("use field() either to define a field or access one") unless args.size == 0
+        raise ArgumentError.new(
+         %|use field() either to define a field or access one|<<
+         %| -- fields must be defined with a block.|) unless
+           args.size == 0
         @fields_by_name
       end
     end
@@ -113,26 +133,41 @@ module Hipe
       ret
     end
 
+    # @oldschool setter-getter
+    def list mixed=nil
+      if mixed.nil?
+        @list
+      else
+        self.list = mixed
+      end
+    end
+
     def list=list
-      raise TypeError.new("list must be enumerable") unless list.kind_of? Enumerable
+      raise TypeError.new("list must be enumerable") unless
+        list.kind_of? Enumerable
       @list = list
     end
 
     def renderer(*args)
       if block_given?
-        raise ArgumentError.new("wrong number of arguments (#{args.size} for 1) ") unless (args.size == 1)
+        raise ArgumentError.new(
+          "wrong number of arguments (#{args.size} for 1) ") unless
+            args.size == 1
         name = args[0]
         instance_existed = @renderers.has_instance?(name)
         renderer = @renderers[name]
         if (renderer.nil?)
           available_renderers = @renderers.keys.map{|k| k.inspect}
-          raise ArgumentError.new("Sorry, no such renderer #{name.inspect}. "<<
-            en{ sp(np('available','renderer'),available_renderers) }.say() )
+          raise ArgumentError.new(
+            "Sorry, no such renderer #{name.inspect}. "<<
+              en{ sp(np('available','renderer'),available_renderers) }.say() )
         end
         yield renderer
         nil
       else
-        raise ArgumentError.new("wrong number of arguments (#{args.size} for 0) ") unless (args.size == 0)
+        raise ArgumentError.new(
+          "wrong number of arguments (#{args.size} for 0) ") unless
+            args.size == 0
         @renderers.accessor
       end
     end
@@ -166,19 +201,22 @@ module Hipe
           when Fixnum: opts[:min_width] = arg
           when Hash:   opts[:opts] = arg
           else
-            raise TypeError.new("unrecognized type for field construction - #{arg.inspect}")
+            raise TypeError.new(
+              "unrecognized type for field construction - #{arg.inspect}")
           end
         end
         if (opts[:opts])
           their_opts = opts.delete(:opts)
           if (dups = their_opts.keys & opts.keys).size > 0
-            raise ArgumentError.new("The way your parameters were interpreted there were duplicates "<<
-              "of #{dups.map{|x| x.inspect}*' and '}")
+            raise ArgumentError.new(
+              "The way your parameters were interpreted there were "<<
+                "duplicates of #{dups.map{|x| x.inspect}*' and '}")
           end
           opts.merge! their_opts
         end
         raise ArgumentError.new("Fields must have names") unless opts[:name]
-        raise TypeError.new("For now fields must have blocks (#{opts[:name]})") unless block
+        raise TypeError.new(
+          "For now fields must have blocks (#{opts[:name]})") unless block
         set opts
         @renderer = block
       end
@@ -188,23 +226,32 @@ module Hipe
       def show
         @visible = true
       end
-      def label
-        @label || @table.labelize.call(@name)
+      # @oldschool setter-getter
+      def label(mixed=nil)
+        if mixed.nil?
+          @label || @table.labelize.call(@name)
+        else
+          self.label = mixed
+        end
       end
       protected
       def set(hash)
         hash.each do |key,value|
           meth = %{#{key}=}
           unless respond_to? meth
-            raise ArgumentError.new("unrecognized option #{key.inspect}") unless respond_to?(meth)
+            raise ArgumentError.new(
+              "unrecognized option #{key.inspect}") unless respond_to?(meth)
           end
           send(meth, value)
         end
       end
     end
 
-    # this renders in two passes so it can set appropriate column widths for ascii\
-    # probably not appropriate for html etc unless we are really lazy and performance isn't an issue
+    #
+    # this renders in two passes so it can set appropriate column widths
+    # for ascii. probably not appropriate for html etc unless we are really
+    # lazy and performance isn't an issue
+    #
     class PreRenderingAsciiRenderer
       class << self
         extend Hipe::Loquacious::AttrAccessor
@@ -222,9 +269,11 @@ module Hipe
       block_accessor :bottom
       block_accessor :after_header
       boolean_accessor :show_header
+      boolean_accessor :show_label
       kind_of_accessor :separator_at, Array
 
-      # the default strategy for rendering horzontal lines will be ones that look like "+-------+"
+      # the default strategy for rendering horzontal lines will be
+      # ones that look like "+-------+" (thanks optparse et al.)
       @lines = lambda{|w| %{+#{'-'*([w-2,0].max)}+} }
 
       class << self
@@ -239,6 +288,7 @@ module Hipe
         @bottom       ||= self.class.lines
         @after_header ||= self.class.lines
         @show_header  = nil if @show_header.nil? # yes
+        @show_label = true if @show_label.nil? # yes
         @separator_at ||= []
       end
 
@@ -251,7 +301,9 @@ module Hipe
           elsif show_header?.nil? : table.show_header
           else show_header? end
 
-        min_widths = visible_fields.map{|field| show_header ? (field.min_width || field.label.length) : 0  }
+        min_widths = visible_fields.map do |field|
+          show_header ? (field.min_width || field.label.length) : 0
+        end
         rows = []
         if (visible_fields.size > 1)
           separators_at = Array.new(visible_fields.size - 1, @separator)
@@ -268,7 +320,8 @@ module Hipe
           visible_fields.each_with_index do |field,index|
             # next unless field.visible?
             rendered = field.renderer.call(item).to_s
-            min_widths[index] = rendered.length if rendered.length > min_widths[index]
+            min_widths[index] = rendered.length if
+              rendered.length > min_widths[index]
             row << rendered
           end
           rows << row
@@ -280,10 +333,23 @@ module Hipe
         # render
         out = Hipe::Io::BufferString.new
         out.puts @top.call(table_width) if @top
+
+        if show_label && table.label
+          out << @left
+          reduce_by = @left.length + @right.length
+          center_width = table_width - reduce_by
+          out << ascii_center(table.label,center_width,:truncate=>true)
+          out << @right
+          if @top # @todo what we really mean is "decorative separator line"
+            out.puts "\n" + @top.call(table_width)
+          end
+        end
+
         if show_header
           out << @left
           out << visible_fields.map do |field|
-            min_width = field.min_width || min_widths[visible_fields.index(field)]
+            min_width = field.min_width ||
+              min_widths[visible_fields.index(field)]
             str = sprintf(%{%#{min_width}s}, field.label)
             str
           end.zip(separators_at + ['']).flatten.join
@@ -304,6 +370,41 @@ module Hipe
         end
         out.puts @bottom.call(table_width) if @bottom
         out
+      end
+
+      # @todo etc
+      def ascii_truncate(text,width,ellipsis='...')
+        if text.length <= width
+          text
+        else
+          use_text = text.slice(0,[width-ellipsis.length,0].max)
+          if ellipsis.length <= width
+            use_text << ellipsis
+          end
+          use_text
+        end
+      end
+
+      # @todo etc
+      def ascii_center text, width, opts={}
+        if text.length > width
+          if opts[:truncate]
+            ascii_truncate(text, width)
+          else
+            text
+          end
+        elsif text.length == width
+          text
+        else
+          margin = width - text.length
+          if margin % 2 == 0
+            left_margin = right_margin = margin/2
+          else
+            left_margin = ( margin.to_f / 2 ).floor
+            right_margin = left_margin + 1
+          end
+          %|#{' '*left_margin}#{text}#{' '*right_margin}|
+        end
       end
     end
 
@@ -337,7 +438,11 @@ module Hipe
           self.show_header = table.show_header
           field(:property){|x| x[0]}
           table.list.each_with_index do |item,idx|
-            field((idx + 1).to_s.to_sym, :align => (orig_renderer.value_cels_alignment||:right)){|x| x[idx+1]}
+            field(
+              (idx + 1).to_s.to_sym,
+              :align =>
+                (orig_renderer.value_cels_alignment||:right)
+            ){|x| x[idx+1]}
           end
           renderer(:ascii) do |r|
             [:left        ,
@@ -347,7 +452,9 @@ module Hipe
             :bottom       ,
             :after_header ,
             :show_header  ,
-            :separator_at ].each { |x| r.send(%{#{x}=}, orig_renderer.send(%{#{x}})) }
+            :separator_at ].each do |x|
+              r.send(%{#{x}=}, orig_renderer.send(%{#{x}}))
+            end
           end
         end
         new_table.list = list

@@ -118,6 +118,7 @@ module Hipe
       # is lossy, the reverse is not.
 
 
+      #
       # @param [String|Array] if String, will be run through the
       # common gsub/split routine.  If needed we can provide a way to
       # circumvent this.
@@ -126,21 +127,23 @@ module Hipe
       # if there is any existing description.  Existing descriptions can be
       # cleared with thing.desc.clear.  If you want to for some reason merge
       # in to any existing description, you could thing.desc.concat(array)
+      #
       def desc= mixed
         raise ArgumentError.new("Won't clobber existing description") if
           (@desc && @desc.length > 0)
         if mixed.kind_of? Array
           desc = mixed
         else
-          desc = mixed.gsub(/^ +/,'').split("\n")
+          desc = mixed.gsub(/^ +/,'').split("\n").map{|x|x=="" ? " " : x}
           # despite attempts at negative look-ahead above, we couldn't
           # preserve intentional trailing newlines in the description guy
+          # also, optparse doesn't like empty strings in @desc
           if desc.length > 0 && md = /(\n+$)/.match(mixed)
             desc.last.concat(md[1])
           end
         end
         self.desc.concat desc # we keep our original object
-        on_desc_change if respond_to? :on_desc_change        
+        on_desc_change if respond_to? :on_desc_change
         @desc
       end
 
@@ -156,7 +159,7 @@ module Hipe
       alias_method :describe, :desc
     end
 
-    # "hideable" ? neither of these are "words"
+    # "hideable" ? neither of these are "words". "visible" is a misnomer
     module Visable
       attr_accessor :visible
       alias_method :visible?, :visible
@@ -182,7 +185,7 @@ module Hipe
       def initialize implementor
         @desc = nil
         @default_request = nil
-        @abilities = AssociativeArray.new.no_clobber.require_key
+        @abilities = Abilities.new
         @implementor_class = implementor
         @speaks = AssociativeArray.new.no_clobber.require_key
       end
@@ -300,12 +303,14 @@ module Hipe
       include Describable, Visable
       NameRe = %r|^([[:space:]]*[a-z][-a-z0-9_]+[[:space:]]*)(.*)$|
       attr_reader :name, :parameters, :speaks, :aliases
+      attr_accessor :definition_context
       # aliases is defind above but not supported out of the box @todo
 
+      #
       # @param [AssociativeArray] existing_assoc existing abilities
       #   keyed by name
       # @see initialize() for the remaining parameters
-
+      #
       def self.create_or_merge(existing_assoc, args, speaks, &proc)
         new_ability = new(args, speaks, &proc)
         if ability = existing_assoc[new_ability.name]
@@ -322,7 +327,7 @@ module Hipe
         args = [args] if String===args
         @visible = true
         @speaks = speaks
-        @parameters = AssociativeArray.new.no_clobber.require_key
+        @parameters = Parameters.new
         opts = args.last.kind_of?(Hash) ? args.pop : nil
         first_string = args.shift
         parse_in_first_string first_string
@@ -341,6 +346,10 @@ module Hipe
         merge_in_definition(&proc) if proc
       end
 
+      def define &proc
+        merge_in_definition(&proc)
+      end
+
       def speaks? paradigm_name
         @speaks && @speaks.has_key?(paradigm_name)
       end
@@ -349,7 +358,7 @@ module Hipe
         raise ArgumentError.new("merge failure: #{msg}")
       end
 
-
+      #
       # for when abilties have been "re-opened", (for dealing with having long
       # descriptions of paramters happening in their own statements.)
       # This might also be useful if an appication object wants to add
@@ -360,64 +369,89 @@ module Hipe
       # and raise a failure when there are instance_variables we have
       # forgotten about.
       #
+      # @todo over in cli we will figure out a way to use the same
+      #
       def merge_in! other
         return merge_fail(%|can't merge-in an ability with a different |<<
-        %|name (mine: "#{name}", other: "#{other.name}")|) unless
-          other.name == name
+          %|name (mine: "#{name}", other: "#{other.name}")|) unless
+            other.name == name
+        other.instance_variable_set('@name',nil)
+        merge_in_speaks! other
+        speaks.keys.each do |key|
+          self.send(%{#{key.to_s}_merge_in!},other)
+        end
+        @visible = other.visible?; other.visible = nil
+        # @todo the below is a bit expensive with delete turned on!
+        @parameters.merge_strict_recursivesque!(other.parameters,:delete=>1)
+        merge_in_desc! other
+        merge_off_definition_context! other
+        unless other.empty?
+          members = other.non_empty_members
+          msg = members.map{|pair| %|#{pair[0]} : #{pair[1].class}| }*', '
+          return merge_fail("not empty in source after merge: "+msg)
+        end
+        nil
+      end
 
+      # @api private
+      def merge_in_speaks! other
         # totally insane.  The new defined ability must know about
         # previous paradigms the existing ability speaks.
         missing = speaks.keys - other.speaks.keys
         newkeys = other.speaks.keys - speaks.keys
         if missing.size > 0
-          return merge_fail(%|for now, the new definition must | <<
-          %|speak a superset of what the old definition spoke (missing:| <<
+          return merge_fail(%|for now, the new definition of #{name} must| <<
+          %| speak a superset of what the old definition spoke (missing:| <<
           %| #{missing.keys.map{|x| x.to_s}*', '})|)
         end
-
-        @visible = other.instance_variable_get('@visible')
-        other.instance_variable_set('@visible',nil)
-
         newkeys.each do |key|
           @speaks[key] = other.speaks[key]
         end
-
         # @todo why are these the same object? should they be?
         if speaks.object_id == other.speaks.object_id
           other.instance_variable_set('@speaks',nil)
         else
           other.speaks.clear
         end
+      end
 
-        # @todo the below is a bit expensive with delete turned on!
-        @parameters.merge_strict_recursivesque!(other.parameters,:delete=>1)
-
+      # @api private
+      def merge_in_desc! other
         if (other.desc.size > 0)
           self.desc = other.desc   # raises on clobber
           other.desc.clear
         end
+      end
 
-        other.instance_variable_set('@name',"")
+      # @api private
+      def merge_off_definition_context! other
+        # this is ridiculous. For now, we don't care about taking the other
+        # definition context from the other ability (we don't really care
+        # care about our own, (if we have one) either), but when --help is
+        # called as an option it has to be able to reach up to the correct
+        # ability object, so here the definition context becomes
+        # an orphan floating in memory, (it was before, too)
+        # but has a handle to this new ability object (self).
+        ctx = other.definition_context or return
+        ctx.ability = self
+        other.definition_context = nil
+        nil
+      end
 
-        # i can't wrap my head around whether we want the new longer list here
-        speaks.keys.each do |key|
-          self.send(%{#{key.to_s}_merge_in!},other)
-        end
-
+      # @return [Array[Array]] pairs of ivar names and values, nil if empty
+      def non_empty_members
         not_empty = []
-        other.instance_variables.each do |name|
-          var = other.instance_variable_get(name)
+        instance_variables.each do |name|
+          var = instance_variable_get name
           if ( !var.nil? and ! var.respond_to?(:empty?) || ! var.empty? )
             not_empty.push [name, var]
           end
         end
+        not_empty.size > 0 ? not_empty : nil
+      end
 
-        if not_empty.size > 0
-          msg = not_empty.map{|pair| %|#{pair[0]} : #{pair[1].class}| }*', '
-          return merge_fail("not empty in source after merge: "+msg)
-        end
-
-        nil
+      def empty?
+        ! non_empty_members
       end
 
       # this gets superceded by cli
@@ -456,6 +490,7 @@ module Hipe
           definition.send("#{speak}_after_ability_definition", self)
         end
         @parameters.merge_strict_recursivesque! definition.parameters
+        @definition_context = definition
       end
 
       def method_name
@@ -517,14 +552,17 @@ module Hipe
     module RequiredParameter
     end
 
-    # This class provides an execution context in which the body
+    #
+    # This provides an execution context in which the body
     # of ability defintions are executed.  The individual paradigms
     # (cli etc.) might define methods for it.
     # this is similar to but not the same as an AbilityParseTree in cli,
     # similar in that it produces a list of parameter definitions, different
     # in that it yeilds it apis to the caller, instead of parsing a string.
+    #
     class AbilityDefinitionContext
-      attr_reader :parameters, :name, :ability
+      attr_reader :parameters, :name
+      attr_accessor :ability
       def initialize ability
         @parameters = AssociativeArray.new.no_clobber.require_key
         @ability = ability
@@ -829,6 +867,20 @@ module Hipe
               "this value is neither subset nor superset of the other.")
           end
         end
+      end
+    end
+
+    class Abilities < AssociativeArray
+      def initialize
+        super
+        no_clobber.require_key
+      end
+    end
+
+    class Parameters < AssociativeArray
+      def initialize
+        super
+        no_clobber.require_key
       end
     end
 

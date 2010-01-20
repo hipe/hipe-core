@@ -23,6 +23,17 @@ module Hipe::Interfacey
     alias_method :to_s, :cli_unparse
   end
 
+  class Parameters
+    # careful - autovivifying array
+    def by_cli_type
+      hash = Hash.new{|hash, key| hash[key] = []}
+      each do |param|
+        hash[param.cli_type] << param
+      end
+      hash
+    end
+  end
+
   class Ability
     attr_accessor :cli_optparse_proxy
 
@@ -78,14 +89,22 @@ module Hipe::Interfacey
         ability_definition.cli_optparse_proxy = @optparse_proxy
       end
     end
+
+    # this is a flagrant hack that crawls inside of the internal OptionParser
+    # to make a duplicate OptionParser only used for displaying help,
+    # one that also displays the optional and required parameters.
+    # The extreme hacking comes when we need to change the requireds and
+    # optionals not to have leading dashes. All of this is wrapped in a ...
+    # @returns lambda suitable to be passed as an argument in an option
+    # defininition.
     def help
       # flagrant hack
       definition_context = self
       lambda do
-        by_type = Hash.new{|hash, key| hash[key] = []}
-        definition_context.parameters.each do |param|
-          by_type[param.cli_type] << param
-        end
+        # the actual ability object might have changed if the
+        # definition was re-opened up
+        ability = definition_context.ability
+        by_type = ability.parameters.by_cli_type
         orig_optparser = definition_context.optparse_proxy.option_parser
         optparse = orig_optparser.dup
         class << optparse;
@@ -95,13 +114,13 @@ module Hipe::Interfacey
         end
         unless optparse._banner
           banner =
-          [
+          [ ability.desc.length > 0 ? (ability.desc*"\n"+"\n\n") : "",
             "usage: #{optparse.program_name}",
             "#{definition_context.ability.name}",
             by_type[:switch].map{|x| x.cli_unparse}*' ',
             by_type[:required].map{|x| x.cli_unparse}*' ',
             by_type[:optional].map{|x| x.cli_unparse}*' '
-          ].reject{|x|""==x} * ' '
+          ].reject{|x|""==x} * ' ' + "\n\n"
           optparse.banner = banner
         end
         optparse.stack = orig_optparser.instance_variable_get('@stack').dup
@@ -116,7 +135,7 @@ module Hipe::Interfacey
             end
           end
         end
-        response = optparse.to_s
+        response = optparse.help
         Cli.add_linebreaks_to_syntax_summary! response
         throw :cli_early_exit, response
       end
@@ -195,17 +214,20 @@ module Hipe::Interfacey
       # and complaining about anything that it can't parse on the
       # input array once it gets to the end of its grammar
 
-      # @return [RequestLite] the provided request,
-      # eat off the unparsed_parameters and create an array at
-      # parsed_parameters
 
       include Lingual::En
       @@singleton = new
+
+
+      # @return [RequestLite] the provided request with all parameters
+      # parsed. "eats off" the unparsed parameters and creates
+      # an array at parsed_parameters
       def self.parse_request! ability, request
         @@singleton.parse_request! ability, request
         nil
       end
 
+      # @api private the implementation for the singleton
       def parse_request! ability, request
         @ability = ability
         @by_type = Hash.new{|hash,key| hash[key] = []}
@@ -231,7 +253,7 @@ module Hipe::Interfacey
       def parse_off_switches ability, request
         proxy = ability.cli_optparse_proxy
         return nil unless @by_type.has_key?(:switch)
-        # remember there is only ever one optparser in memory per ability
+        # remember there is only ever one optparser in memory per ability def.
         proxy.parse_context.result.clear
         begin
           proxy.option_parser.parse!(request.unparsed_parameters)
@@ -245,8 +267,10 @@ module Hipe::Interfacey
         opts
       end
 
-      # @return an argv-like array of key-value pairs for all the switches
-      # defined with defaults that were not in the provided argv
+      # @return [Array] an ARGV-like array with each even
+      # element being a name (with leading dashes) and each
+      # odd element being the corresponding value; for all the
+      # switched defined with defaults that were not in the provided argv.
       def make_switch_default_argv proxy
         provided_keys = proxy.parse_context.result.keys
         @by_type[:switch].select do |param|
@@ -257,10 +281,12 @@ module Hipe::Interfacey
         end.flatten
       end
 
+      # @return [Array] with one element for every defined optional
+      # positional parameter (even those that aren't in the request),
+      # populating the positions in that array with defaults as necessary,
+      # or nil values for arguments that were not provided and have
+      # no defaults
       def parse_off_optionals request
-        # return one array element for every defined optional positional,
-        # populating defaults positionally as necessary, or
-        # nil if the argument was not provided and there are no defaults
         list = @by_type[:optional]
         return [] if list.length == 0
         min = [list.size, request.unparsed_parameters.size].min
@@ -600,28 +626,36 @@ module Hipe::Interfacey
       # application-level functionality, but "help" is one of the
       # more compelling reasons to use this whole thing at all.
 
+
+      #
+      # flagrant hack again
+      # we create a new OptionParser object to manage the displaying
+      # of any program description and the available commands (abilities)
+      #
       def self.help(interface,impementing_object,ability,request)
-        # flagrant hack again
         optparse = OptionParser.new
-        class << optparse;
-          attr_accessor :stack
+        class << optparse
           def last; @stack[2].instance_variable_get('@list').last end
         end
-        banners = []
-        if interface.desc.size > 0
-          banners.concat interface.desc
-        end
-        banners.push "usage: #{optparse.program_name} <command>"<<
-        " [options]"
-        optparse.banner = banners * "\n"
+        optparse.banner = [
+          interface.desc,
+          ["usage: #{optparse.program_name} <command> [options]"]
+        ].flatten * "\n"
         optparse.separator ' '
         optparse.separator 'available commands:'
+        widest = 0
         interface.abilities.each do |ability|
+          # it needs a valid long-style name at first
           optparse.on("--#{ability.name}", *ability.desc)
           switch = optparse.last
           switch.instance_variable_set('@long',[ability.name])
+          widest = ability.name.length if ability.name.length > widest
         end
-        ResponseLite.new(:message => optparse.to_s)
+        # we know it doesn't have any short() versions because
+        # we just set it above.  @todo aliases as switches?
+        optparse.summary_indent = '' # it will still have ' '*4 for shorts (?)
+        optparse.summary_width = 8 + widest # 4 on left 4 on rt side of name
+        ResponseLite.new(:message => optparse.help)
       end
 
       def self.version(impementing_object,interface,ability,request)
@@ -650,16 +684,16 @@ module Hipe::Interfacey
 
       def more_info_about_commands
         sps = []
-        
-        ability = @interface.ability_for_request('help', :cli)          
+
+        ability = @interface.ability_for_request('help', :cli)
         if ability
-          use_name = (ability.aliases && ability.aliases.size > 0) ? 
-            ability.aliases.first : ability.name          
+          use_name = (ability.aliases && ability.aliases.size > 0) ?
+            ability.aliases.first : ability.name
           sps << ("See '#{@app_instance.cli_application_name} "<<
             "#{use_name}'.")
           sps << "" # mvc whatever
         end
-        
+
         names = all_visible_cli_abilities.map{|x| %{"#{x.name}"} }
         case names.size
           when 0: sps << "There are no avaible commands for this application."
