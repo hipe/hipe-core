@@ -115,7 +115,8 @@ module Hipe
       # only for historical reasons.   For this same reason the description
       # is represented internally as an array of strings, which shouldn't
       # be a problem because while converting an array of strings to a string
-      # is lossy, the reverse is not.
+      # is lossy, representing a string as an array of strings is not lossy,
+      # in fact gainey.
 
 
       #
@@ -128,19 +129,41 @@ module Hipe
       # cleared with thing.desc.clear.  If you want to for some reason merge
       # in to any existing description, you could thing.desc.concat(array)
       #
+      # As for what is meant by "the common gsub/split routine" above:
+      # We make some assumptions about what was intended in a string that
+      # may have come from a multiline HEREDOC style string literal:
+      # leading whitespace on the first line is indentation to make the code
+      # pretty, not the outputted string pretty; all ouputted lines
+      # of the string will thus have indentation reduced by this first
+      # indentation.  (so you can still have meaningful indentation in your
+      # multiline HEREDOC-style string if subsequent lines are indented
+      # further than the first line.)  If this is not the desired behavior
+      # we can consider making this somehow optional.
+      #
+      # Don't use tabs.  Ever. ;)
+      #
       def desc= mixed
         raise ArgumentError.new("Won't clobber existing description") if
           (@desc && @desc.length > 0)
         if mixed.kind_of? Array
           desc = mixed
-        else
-          desc = mixed.gsub(/^ +/,'').split("\n").map{|x|x=="" ? " " : x}
-          # despite attempts at negative look-ahead above, we couldn't
-          # preserve intentional trailing newlines in the description guy
-          # also, optparse doesn't like empty strings in @desc
-          if desc.length > 0 && md = /(\n+$)/.match(mixed)
-            desc.last.concat(md[1])
+        elsif mixed.kind_of? String
+          if mixed.index("\n")
+            leading_whitespace = /^( *)/.match(mixed).captures[0]
+            ws_re = Regexp.new('^'+leading_whitespace);
+            desc = mixed.gsub(ws_re,'').split("\n").map{|x|x=="" ? " " : x}
+              # optparse doesn't like empty strings in @desc.  try it!
+            # despite attempts at negative look-ahead above, we couldn't
+            # preserve intentional trailing newlines in the description guy
+            # because 'AAAAA'.split('A') => []
+            if desc.length > 0 && md = /(\n+\Z)/.match(mixed)
+              desc.last.concat(md[1])
+            end
+          else
+            desc = [mixed]
           end
+        else
+          raise ArgumentError.new("bad class for description: #{mixed.class}")
         end
         self.desc.concat desc # we keep our original object
         on_desc_change if respond_to? :on_desc_change
