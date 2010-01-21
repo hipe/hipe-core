@@ -210,7 +210,8 @@ module Hipe
         @default_request = nil
         @abilities = Abilities.new
         @implementor_class = implementor
-        @speaks = AssociativeArray.new.no_clobber.require_key
+        @speaks = AssociativeArray.new.require_key.
+          no_clobber(ArgumentError)
       end
 
       # @oldschool-setter-getter
@@ -587,7 +588,8 @@ module Hipe
       attr_reader :parameters, :name
       attr_accessor :ability
       def initialize ability
-        @parameters = AssociativeArray.new.no_clobber.require_key
+        @parameters = AssociativeArray.new.require_key.
+          no_clobber(ArgumentError)
         @ability = ability
       end
       def required(name,*args)
@@ -749,6 +751,9 @@ module Hipe
     # @todo - move this to hipe-core/struct/ if you want to use it elsewhere
     # but why should you? you will always want to use Interfacey too!
     class AssociativeArray < Array
+
+      class ClobberError < RuntimeError; end
+
       # when we eventually need any methods from the below list we will have
       # to deal with @keys and @keys_order.  Trivial but crufty until needed.
       undef :pop, :reject!, :replace, :shift, :slice!,
@@ -815,7 +820,7 @@ module Hipe
       def require_key;   @require_key = true; self   end
       def no_clobber(throw_class=nil)
         @clobber = false;
-        @clobber_exception_class = throw_class || ApplicationArgumentError
+        @clobber_exception_class = throw_class || ClobberError
         self
       end
 
@@ -896,14 +901,14 @@ module Hipe
     class Abilities < AssociativeArray
       def initialize
         super
-        no_clobber.require_key
+        require_key.no_clobber(ArgumentError)
       end
     end
 
     class Parameters < AssociativeArray
       def initialize
         super
-        no_clobber.require_key
+        require_key.no_clobber(ArgumentError)
       end
     end
 

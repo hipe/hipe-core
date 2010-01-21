@@ -330,7 +330,8 @@ module Hipe::Interfacey
       attr_reader :result
       def initialize proxy
         @proxy = proxy
-        @result = AssociativeArray.new.no_clobber.require_key
+        @result = AssociativeArray.new.require_key.
+          no_clobber(ApplicationArgumentError)
         @result.clobber_message = "Can only specify %s once"
           # @todo i18n alla merb
       end
@@ -436,7 +437,8 @@ module Hipe::Interfacey
       def parse string
         eat_me = string.dup
         begin
-          parameters = AssociativeArray.new.no_clobber.require_key
+          parameters = AssociativeArray.new.require_key.
+            no_clobber(ArgumentError)
           name = nil
           catch :end_of_string do
             name = parse_off_name eat_me
