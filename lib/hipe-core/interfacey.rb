@@ -592,6 +592,9 @@ module Hipe
           no_clobber(ArgumentError)
         @ability = ability
       end
+      def describe str
+        @ability.describe str
+      end
       def required(name,*args)
         param =
           ParameterDefinition.from_definition_block(:required, name, *args)
