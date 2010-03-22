@@ -1,8 +1,4 @@
 # bacon -n'\(tbl\d+\)'  ./spec/hipe-core/struct/spec_table.rb
-# require 'extlib' # for String#t(), and Extlib::Inflection.humanize
-
-
-require 'ruby-debug'
 require 'hipe-core/struct/table'
 require 'ostruct'
 
@@ -11,9 +7,9 @@ describe Hipe::Table do
   it "should work (tbl1)" do
     @table = Hipe::Table.make do
       field(:name){|item| item.name}
-      field(:height){|item| "%2.2f feet".t(item.height) }
+      field(:height){|item| "%2.2f feet" % item.height }
       field(:birthday,:visible=>false ){|item| item.birthday.strftime('%Y-%m-%d %H:%I:%S') }
-      labelize{|name| Extlib::Inflection.humanize(name) }
+      labelize{|name| titleize(humanize(name)) }
       renderer(:ascii) do |r|
         r.left  = '| ';  r.right = ' |'; r.separator   = ' | '
         r.header{|text| x.gsub(' ','_')}
@@ -70,7 +66,7 @@ describe Hipe::Table do
 
     t = Hipe::Table.make do
       field(:name){|x| x[:name]}
-      field(:height){|x| "%2.2f feet".t(x[:height]) }
+      field(:height){|x| "%2.2f feet" % x[:height] }
       self.list = [
         {:name=>'larry', :height=>5.75    },
         {:name=>'mo',    :height=>6.0     },
@@ -94,7 +90,7 @@ describe Hipe::Table do
 
     t = Hipe::Table.make do
       field(:name){|x| x[:name]}
-      field(:height){|x| "%2.2f feet".t(x[:height]) }
+      field(:height){|x| "%2.2f feet" % x[:height] }
       self.list = [
         {:name=>'larry', :height=>5.75    },
         {:name=>'mo',    :height=>6.0     },

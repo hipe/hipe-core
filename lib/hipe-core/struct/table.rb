@@ -1,12 +1,9 @@
 # bacon spec/struct/spec_table.rb
-require 'hipe-core'
 require 'hipe-core/loquacious/all'
 require 'hipe-core/io/buffer-string'
-require 'hipe-core/lingual/ascii-typesetting'
 require 'hipe-core/struct/hash-like-with-factories'
 require 'hipe-core/struct/hash-like-write-once-extension'
 require 'hipe-core/lingual/en'
-require 'orderedhash'
 
 # @todo - reduce these dependencies on externals if we can.
 # they are all pretty light, but it's kind of ridiculous
@@ -28,7 +25,7 @@ module Hipe
     #
     #  (the reason we made a class for it was because we kept changing the
     #  implementation in GoldenHammer -- Not sure what combination of Set,
-    #  SortedSet, OrderedHash (molic), AS3 OrderedHash, OpenStruct or Mash
+    #  SortedSet, OrderedHas_h (molic), AS3 OrderedHas_h, OpenStruct or Mash
     #  we will eventually use, so we needed to insulate the implementation
     #  from some kind of spec for this.)
     #
@@ -36,6 +33,16 @@ module Hipe
     # :ascii contexts
     #
 
+    module CommonInstanceMethods
+      def humanize mixed
+        mixed.to_s.gsub('_', ' ')
+      end
+      def titleize mixed
+        mixed.to_s.sub(/^([a-z])/){$1.upcase}
+      end
+    end
+    include CommonInstanceMethods
+    extend CommonInstanceMethods
 
     extend Loquacious::AttrAccessor
     include Lingual::English
@@ -44,19 +51,16 @@ module Hipe
       # added to below
     end
 
-    protected
-      def initialize
-        @fields = []
-        @fields_by_name = {}
-        @show_header = nil
-        @renderers = Renderers.new
-      end
+  protected
+    def initialize
+      @fields = []
+      @fields_by_name = {}
+      @show_header = nil
+      @renderers = Renderers.new
+    end
 
-      def self.humanize_lite(str)
-        str.to_s.gsub('_',' ')
-      end
+  public
 
-    public
     attr_accessor :fields
     block_accessor :labelize
     boolean_accessor :visible
@@ -69,7 +73,7 @@ module Hipe
     def self.make &block
       t = self.new
       t.instance_eval(&block)
-      t.labelize ||= lambda{ |field_name| humanize_lite(field_name) }
+      t.labelize ||= lambda{ |field_name| humanize(field_name) }
       t
     end
 
