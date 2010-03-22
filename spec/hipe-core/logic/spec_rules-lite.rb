@@ -25,7 +25,9 @@ describe Hipe::RulesLite do
   end
 
   it "fails when duping names of rules (rl3)" do
-    e = lambda{  Hipe::RulesLite.new{ rule('a'){}; rule('a'){} } }.should.raise(Hipe::Exception)
+    e = lambda{  Hipe::RulesLite.new{ rule('a'){}; rule('a'){} } }.should.raise(
+      Hipe::RulesLite::Fail
+    )
     e.message.should.match %r{cannot redefine}
   end
 
