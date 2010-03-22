@@ -1,5 +1,5 @@
-# bacon -n'\(tbl\d+\)' spec/struct/spec_table.rb
-require 'extlib' # for String#t(), and Extlib::Inflection.humanize
+# bacon -n'\(tbl\d+\)'  ./spec/hipe-core/struct/spec_table.rb
+# require 'extlib' # for String#t(), and Extlib::Inflection.humanize
 
 
 require 'ruby-debug'

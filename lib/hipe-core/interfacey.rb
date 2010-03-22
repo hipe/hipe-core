@@ -747,7 +747,7 @@ module Hipe
       end
     end
 
-    # OrderedHash can be annoying.  This achieves what we want with less sloc.
+    # OrderedHas_h can be annoying.  This achieves what we want with less sloc.
     # additional features: no_clobber, custom messages on clobber,
     # require_key (meaning non Fixnum, non nil key),
     # merge_strict_recursivesque!,  attr_accessors (sort of open struct-like)

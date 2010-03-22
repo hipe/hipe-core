@@ -1,5 +1,6 @@
 require 'hipe-core'  # for Exception
 
+# this was copy-pasted to ack-lite-parse! look at that before you change this
 module ::Hipe::Io::StackLike
   # abstract a file into a stack (or stream) of lines that you can either "peek" or "pop"
   # maybe look at the FileString library that apeiros was working on

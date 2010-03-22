@@ -37,7 +37,6 @@ module GemHelpers
       #s.extra_rdoc_files = %w[README.rdoc MIT-LICENSE.txt History.txt]
       s.extra_rdoc_files = %w[MIT-LICENSE.txt History.txt]
 
-      s.add_dependency "rools", ">= 0.4" # just if you want well formed articles for hipe-core/lingual
     end
   end
 

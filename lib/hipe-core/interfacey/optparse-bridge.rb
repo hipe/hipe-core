@@ -576,7 +576,13 @@ module Hipe::Interfacey
     module ApplicationInstanceMethods
       # this gets mixed in to the implementor to give it cli_run()
       # @todo don't change default object -- maybe dup it?
-      def cli_run argv
+      # @param args - typically ARGV but sometimes 'arg1','arg2'.. for testing
+      def cli_run *args
+        if (args.length == 1 && args[0].respond_to?(:length))
+          argv = args[0]
+        else
+          argv = args
+        end
         interface = self.cli_interface
         context = interface.create_response_context(self, :cli)
         request = RequestLite.new argv
