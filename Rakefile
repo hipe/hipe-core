@@ -1,122 +1,42 @@
-# This file is copy-pasted into other gems (and versioned there) but this here is the official version
-# which officially lives in github.com/hipe/hipe-core..etc.  This is a list of the other projects
-# that use this file, when you change it here make sure it doesn't break there
-#  - hipe-cli
-#  - hipe-sosy
+require 'rubygems'
+require 'rake'
 
+begin
+  gem 'jeweler', '~> 1.4'
+  require 'jeweler'
 
-# this file was originally copy-pasted from webrat's Thorfile.  Thank you Bryan Helmkamp!
-module GemHelpers
+  Jeweler::Tasks.new do |gem|    
+    gem.name      = 'hipe-core'
+    gem.summary   = %q{core library for the hipe family of products (deprecated!)}      
+    gem.description  = <<-EOS.strip
+    core library for the hipe family of products.  data-structure related utilities.
+    rudimentary natural language production.  exception factories.  struct diff.
+    fun for the whole family.  (copy paste the stuff you need there is a lot of cruft here)
+    EOS
+            
+    gem.email     = "chip.malice@gmail.com"
+    gem.homepage  = "http://github.com/hipe/hipe-core"
+    gem.authors   = [ "Chip Malice" ]
+    gem.bindir    = ""
+    # gem.bindir    = 'bin'     NO! the files in bin are for development only
+    gem.date      = %q{2009-11-19}  
+    # gem.rubyforge_project = 'none'    
 
-  def generate_gemspec
-    $LOAD_PATH.unshift(File.expand_path(File.join(File.dirname(__FILE__), "lib")))
-    require 'hipe-core'
-    
-    Gem::Specification.new do |s|    
-      s.name      = 'hipe-core'
-      s.version   = Hipe::Core::VERSION
-      s.required_rubygems_version = Gem::Requirement.new("> 1.3.1") if s.respond_to? :required_rubygems_version=
-      s.author    = "Mark Meves"
-      s.email     = "mark.meves@gmail.com"
-      s.homepage  = "http://github.com/hipe/hipe-core"
-      s.date      = %q{2009-11-19}  
-      s.summary   = %q{core library for the hipe family of products}  
-      s.description  = <<-EOS.strip
-      core library for the hipe family of products.  data-structure related utilities.
-      rudimentary natural language production.  exception factories.  struct diff.
-      fun for the whole family.
-      EOS
-
-      require "git"
-      repo = Git.open(".")
-
-      s.files      = normalize_files(repo.ls_files.keys - repo.lib.ignored_files)
-      s.test_files = normalize_files(Dir['spec/**/*.rb'] - repo.lib.ignored_files)
-
-      s.has_rdoc = false  #*
-      #s.extra_rdoc_files = %w[README.rdoc MIT-LICENSE.txt History.txt]
-      s.extra_rdoc_files = %w[MIT-LICENSE.txt History.txt]
-
-    end
   end
+  Jeweler::GemcutterTasks.new
 
-  def normalize_files(array)
-    # only keep files, no directories, and sort
-    array.select do |path|
-      File.file?(path)
-    end.sort
-  end
-
-  # Adds extra space when outputting an array. This helps create better version
-  # control diffs, because otherwise it is all on the same line.
-  def prettyify_array(gemspec_ruby, array_name)
-    gemspec_ruby.gsub(/s\.#{array_name.to_s} = \[.+?\]/) do |match|
-      leadin, files = match[0..-2].split("[")
-      leadin + "[\n    #{files.split(",").join(",\n   ")}\n  ]"
-    end
-  end
-
-  def read_gemspec
-    @read_gemspec ||= eval(File.read("hipe-core.gemspec"))
-  end
-
-  def sh(command)
-    puts command
-    system command
-  end
+  FileList['tasks/**/*.rake'].each { |task| import task }
+rescue LoadError
+  puts 'Jeweler (or a dependency) not available. Install it with: gem install jeweler'
 end
 
-class Default < Thor
-  include GemHelpers
+desc "hack turns the installed gem into a symlink to this directory"
 
-  desc "gemspec", "Regenerate hipe-core.gemspec"
-  def gemspec
-    File.open("hipe-core.gemspec", "w") do |file|
-      gemspec_ruby = generate_gemspec.to_ruby
-      gemspec_ruby = prettyify_array(gemspec_ruby, :files)
-      gemspec_ruby = prettyify_array(gemspec_ruby, :test_files)
-      gemspec_ruby = prettyify_array(gemspec_ruby, :extra_rdoc_files)
-
-      file.write gemspec_ruby
-    end
-
-    puts "Wrote gemspec to hipe-core.gemspec"
-    read_gemspec.validate
-  end
-
-  desc "build", "Build a hipe-core gem"
-  def build
-    sh "gem build hipe-core.gemspec"
-    FileUtils.mkdir_p "pkg"
-    FileUtils.mv read_gemspec.file_name, "pkg"
-  end
-
-  desc "install", "Install the latest built gem"
-  def install
-    sh "gem install --local pkg/#{read_gemspec.file_name}"
-  end
-
-  desc "release", "Release the current branch to GitHub and Gemcutter"
-  def release
-    gemspec
-    build
-    Release.new.tag
-    Release.new.gem
-  end
-end
-
-class Release < Thor
-  include GemHelpers
-
-  desc "tag", "Tag the gem on the origin server"
-  def tag
-    release_tag = "v#{read_gemspec.version}"
-    sh "git tag -a #{release_tag} -m 'Tagging #{release_tag}'"
-    sh "git push origin #{release_tag}"
-  end
-
-  desc "gem", "Push the gem to Gemcutter"
-  def gem
-    sh "gem push pkg/#{read_gemspec.file_name}"
-  end
+task :hack do
+  kill_path = %x{gem which hipe-core}
+  kill_path = File.dirname(File.dirname(kill_path))
+  new_name  = File.dirname(kill_path)+'/ok-to-erase-'+File.basename(kill_path)
+  FileUtils.mv(kill_path, new_name, :verbose => 1)
+  this_path = File.dirname(__FILE__)
+  FileUtils.ln_s(this_path, kill_path, :verbose => 1)
 end
